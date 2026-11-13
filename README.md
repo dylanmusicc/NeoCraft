@@ -1,250 +1,163 @@
-# NeoCraft
+<div align="center">
 
-A native macOS Minecraft: Java Edition launcher built with Swift 6 and SwiftUI, tuned for Apple silicon and 8 GB Macs.
+<img src="https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge&logo=apple" alt="macOS 14+">
+<img src="https://img.shields.io/badge/Apple_Silicon-arm64-4ADE80?style=for-the-badge&logo=apple" alt="Apple Silicon">
+<img src="https://img.shields.io/badge/Swift-6-FBBF24?style=for-the-badge&logo=swift" alt="Swift 6">
+<img src="https://img.shields.io/badge/Version-2.0.0-7C3AED?style=for-the-badge" alt="v2.0.0">
 
-NeoCraft handles the whole lifecycle for you: Microsoft sign-in, Mojang version resolution, Fabric, Java discovery and installation, concurrent asset downloads, Modrinth content, and a quiet performance profile that keeps fanless MacBooks comfortable.
+# ⛏️ NeoCraft
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Play        Instances        Mod Library        Settings    │
-│                                                              │
-│  Microsoft device-code auth   Mojang + Fabric + Modrinth     │
-│  Automatic Eclipse Temurin    Java 21 / 25, arm64 native     │
-│  Neo Boost Fabric preset      Sodium, Lithium, FerriteCore   │
-└──────────────────────────────────────────────────────────────┘
-```
+### *Der native Minecraft-Launcher, den dein Mac verdient hat.*
 
-## Requirements
+**Minecraft: Java Edition — paved with Swift, fueled by magic.**
 
-- macOS 14 Sonoma or newer
-- Apple silicon Mac (arm64 build target)
-- Swift 6 toolchain from the Xcode Command Line Tools
-- An internet connection for the first launch
-- A Microsoft account that owns Minecraft: Java Edition
+Ein Launch-Pad in Swift 6 + SwiftUI, gebaut für Apple Silicon und leise 8-GB-Macs.
+Microsoft-Anmeldung, Mojang-Versionen, Fabric, Java-Installation, Modrinth —
+alles wie von Zauberhand.
 
-No Xcode project or App Sandbox is required. NeoCraft is a Swift Package Manager executable bundled into a normal `.app`.
+</div>
 
-## Install
+---
 
-**macOS installer (.pkg, recommended)**
+## ✨ Was NeoCraft kann
 
-1. Download `NeoCraft-<version>.pkg` from the Releases page and double-click it.
-2. The installer places NeoCraft.app in `/Applications` — no dragging required.
-3. Because the app is not notarized with an Apple Developer ID yet, right-click NeoCraft.app and select Open on the first launch (or run `xattr -cr /Applications/NeoCraft.app` in Terminal).
+| | |
+|---|---|
+| 🎮 **Ein-Klick-Play** | Microsoft Device-Code-Login, Mojang-Versionen, Fabric-Loader, Neo Boost — bereit in einem Atemzug. |
+| ☕ **Java, automatisch** | Eclipse Temurin JDK 21/25 wird selbstständig geladen — passgenau zur Minecraft-Version. |
+| 📦 **Mod Library** | Modrinth-Suche mit Versions- & Fabric-Filtern, Dependency-Auflösung, One-Click-Install. |
+| 🌍 **6 Sprachen** | Englisch, British English, Deutsch, Spanisch, Französisch, Russisch. |
+| 🛏️ **Bedrock (Beta)** | Minecraft für Windows läuft nativ über Wine + D3DMetal — direkt aus der App. |
+| 🎨 **Studio** | Themes, Wallpapers, Akzente, Grid — dein Launcher, dein Stil. Frosted Glass bis OLED Dark. |
+| 🌡️ **Kühl & leise** | 4,5 GB Heap, G1GC-Tuning, FPS-Cap & Render-Distance — dein MacBook bleibt kühl. |
+| 📡 **Server Radar** | Server-Liste mit Live-Ping direkt im Launcher. |
 
-**Disk image (.dmg)**
+---
 
-1. Download `NeoCraft-<version>.dmg`, open it and drag NeoCraft.app into the Applications folder.
-2. Same first-launch step as above.
-
-Then sign in with your Microsoft account under Settings, create an instance, and hit Play!
-For Bedrock instances, make sure `Sources/NeoCraft Bedrock` was built (`scripts/build.sh` inside it) before running `./build.sh`, so the Bedrock component is bundled.
-
-## Build
+## 🚀 Schnellstart — 60 Sekunden bis zum Bauen
 
 ```bash
-chmod +x build.sh
-./build.sh
-open build/NeoCraft.app
+# 1. NeoCraft holen
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.0.0.pkg
+
+# 2. Installieren (zieht die App nach /Applications)
+open NeoCraft-2.0.0.pkg
 ```
 
-`./build.sh --run` builds and opens the app in one step.
+> **Erster Start:** macOS fragt einmal nach Erlaubnis — **Rechtsklick → Öffnen**.
+> Der Build ist ad-hoc signiert; mehr dazu unter [⚠️ Hinweise](#-warnungen--hinweise).
 
-### Distribution artifacts
+Dann: **Settings → Microsoft-Konto anmelden → Instanz erstellen → PLAY.**
+Das richtige JDK lädt sich von allein. Fertig.
 
-Two styled installers are produced from `build/NeoCraft.app`:
+<details>
+<summary>🖼️ Alternativ: DMG (Drag & Drop)</summary>
 
 ```bash
-./scripts/MakePKG.sh   # build/NeoCraft-<version>.pkg — GUI installer → /Applications
-./scripts/MakeDMG.sh   # build/NeoCraft-<version>.dmg — drag-to-Applications image
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.0.0.dmg
+open NeoCraft-2.0.0.dmg
+# NeoCraft.app auf den Applications-Ordner ziehen
 ```
 
-Both use the NeoCraft visual language (forest gradient, isometric grass
-block, pixel wordmark). The DMG background is rendered by
-`scripts/GenerateDMGBackground.swift`; the PKG welcome/conclusion screens
-by `scripts/GenerateInstallerBackground.swift` plus embedded app icon,
-background and the bundled Silkscreen pixel font.
+</details>
 
-Note: `MakeDMG.sh` requires `dmgbuild` (`python3 -m pip install dmgbuild`)
-because Finder's AppleScript `background picture` API stopped working in
-macOS 26 — dmgbuild writes the `.DS_Store` directly instead.
+---
 
-The script:
+## 🏗️ Aus dem Quellcode bauen
 
-1. Builds the release binary with `swift build -c release`.
-2. Creates `build/NeoCraft.app/Contents/{MacOS,Resources}`.
-3. Writes a complete `Info.plist`.
-4. Generates a themed icon with Core Graphics and `iconutil`.
-5. Ad-hoc signs the bundle with `entitlements.plist`.
-6. Verifies the signature.
+Voraussetzungen: macOS 14+, Apple Silicon, Xcode Command Line Tools (`xcode-select --install`).
 
-The result is a double-clickable app. It is ad-hoc signed, which is appropriate for local builds. Distributing it to another Mac requires a Developer ID certificate and notarization.
-
-### Entitlements
-
-| Entitlement | Purpose |
-| --- | --- |
-| `com.apple.security.network.client` | Mojang, Fabric, Adoptium, Microsoft and Modrinth HTTPS |
-| `com.apple.security.cs.allow-jit` | Allows a downloaded JDK to execute |
-| `com.apple.security.cs.allow-unsigned-executable-memory` | Local Java launcher compatibility |
-| `com.apple.security.cs.disable-library-validation` | Allows the bundled JVM to load its own libraries |
-| App Sandbox | **Disabled** so downloaded Java runtimes can execute |
-
-## Features
-
-### Play
-
-- One-click launch with automatic Java, version, Fabric and Neo Boost preparation.
-- Live memory, CPU, thermal and Low Power Mode telemetry.
-- Activity feed with determinate download progress.
-- Minecraft patch notes with full markdown detail.
-- Launch planning that redacts access tokens from logs.
-
-### Instances
-
-- Isolated game directories for worlds, mods, resource packs, shaders and screenshots.
-- Mojang release and snapshot catalog.
-- Vanilla or Fabric, per-instance Java runtime, memory override, JVM/game arguments.
-- Icon and accent customization.
-- Duplicate, reveal in Finder, or move to the Bin.
-
-### Mod Library
-
-- Modrinth v2 search for mods, resource packs and shaders.
-- Minecraft version and Fabric-aware filtering using the selected instance.
-- One-click install with required dependency resolution.
-- Installed-state tracking and removal.
-- Project details with markdown body, gallery, license and compatible files.
-
-### Neo Boost
-
-Fabric Loader + Fabric API plus Sodium, Lithium, FerriteCore and ImmediatelyFast, resolved from Modrinth at install time. Optional per instance and applied automatically before first launch when enabled.
-
-### Bedrock Edition (beta)
-
-- Bedrock instances launch through **NeoCraft Bedrock**, a companion component (Wine + Xbox GDK runtime + Apple's D3DMetal) that `build.sh` bundles inside `NeoCraft.app` at `Contents/Resources/Bedrock/` when `Sources/NeoCraft Bedrock/dist/NeoCraft Bedrock.app` has been built — nothing is installed into `/Applications`.
-- Pressing Play on a Bedrock instance launches the bundled component directly with `--play`: it starts the game without showing its own window. The component's UI (accounts, game install, worlds, settings) only appears when setup is needed — first run, sign-in — or via the gear button next to Play.
-- Requires macOS 27 and a Microsoft account that owns Minecraft for Windows.
-
-### Java
-
-- Detects Homebrew, `/Library/Java/JavaVirtualMachines`, `java_home`, and NeoCraft-managed runtimes.
-- Automatically downloads and extracts the matching Eclipse Temurin macOS arm64 JDK.
-- Per-version required Java is read from the Mojang version manifest; current 2026 releases require Java 25.
-- Manual runtime override with executable picker, plus Java 21 and 25 install buttons.
-- Everything is stored in Application Support for user-writable, sandbox-free execution.
-
-### Performance defaults
-
-- `-Xmx4608M -Xms1024M` (4.5 GB / 1 GB)
-- `-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=100`
-- `-XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch`
-- `-XX:StackShadowPages=32`
-- Cool & Quiet: 60 FPS cap and 10-chunk render distance.
-- Max Performance: uncapped frame rate with a balanced render distance.
-- Minecraft 1.20.5+ options are edited directly (`options.txt`), respecting existing user settings.
-
-## Data layout
-
-```
-~/Library/Application Support/NeoCraft/
-├── state.json                 # settings, instances, account metadata
-├── shared/
-│   ├── versions/              # client jars, version JSON, log configs
-│   ├── libraries/             # Mojang + Fabric libraries
-│   └── assets/                # asset index and objects
-├── runtime/                   # Eclipse Temurin JDKs managed by NeoCraft
-├── instances/<UUID>/
-│   ├── minecraft/             # game directory, mods, saves, options.txt
-│   ├── natives/               # extracted arm64 natives
-│   └── neocraft/              # installed content + Neo Boost marker
-├── cache/                     # temporary download cache
-└── logs/                      # launch logs and console archives
+```bash
+git clone https://github.com/dylanmusicc/NeoCraft.git
+cd NeoCraft
+./build.sh          # baut build/NeoCraft.app
+./build.sh --run    # baut und startet sofort
 ```
 
-Microsoft refresh and access tokens are stored in the macOS Keychain, not in `state.json`.
+### Distribution-Artefakte
 
-## Architecture
+```bash
+./scripts/MakePKG.sh   # → build/NeoCraft-<version>.pkg  (GUI-Installer)
+./scripts/MakeDMG.sh   # → build/NeoCraft-<version>.dmg  (Drag & Drop)
+```
+
+Beide Installer tragen das NeoCraft-Design: Forest-Gradient, isometrischer
+Grasblock, Pixel-Wordmark, App-Icon und die Silkscreen-Pixel-Schrift.
+`MakeDMG.sh` braucht `python3 -m pip install dmgbuild` — der AppleScript-Weg
+für DMG-Hintergründe ist seit macOS 26 kaputt.
+
+---
+
+## 🗺️ Architektur
 
 ```
 Sources/NeoCraft/
-├── App/           AppModel (observable coordinator), app entry, commands
-├── Core/          paths, networking, downloader, persistence, Keychain,
-│                  system metrics, logging, instance scanner
-├── Models/        settings, instances, Minecraft/Fabric/Modrinth DTOs, activity
+├── App/           AppModel (Observable-Koordinator), App-Einstieg
+├── Core/          Pfade, Netzwerk, Downloader, Persistenz, Keychain,
+│                  System-Metriken, Logging, Instance-Scanner
+├── Models/        Settings, Instanzen, Mojang/Fabric/Modrinth-DTOs
 ├── Services/
-│   ├── Auth/      Microsoft device code -> Xbox Live -> XSTS -> Minecraft
-│   ├── Game/      version manifest, installer, Java manager, launch planner,
-│   │              options tweaker, process supervision
-│   └── Modrinth/  v2 API client, dependency resolver, Neo Boost installer
-└── Views/         Root, sidebar and the four product sections, sheets,
-                   design system
+│   ├── Auth/      Microsoft Device-Code → Xbox Live → XSTS → Minecraft
+│   ├── Game/      Versionsmanifest, Installer, Java-Manager,
+│   │              Launch-Planer, Options-Tweaker, Prozess-Supervision
+│   └── Modrinth/  v2-API, Dependency-Resolver, Neo-Boost-Installer
+└── Views/         Root, Sidebar, vier Produkt-Bereiche, Sheets,
+                   Design-System
 ```
 
-### Concurrency
+**Concurrency:** Swift 6 Strict Concurrency — Services sind Actors,
+UI-State ist `@MainActor @Observable`, Downloads laufen über ein
+geteiltes `URLSession`-Fast-Path plus Delegate-Session mit Fortschritt.
 
-Swift 6 strict concurrency is enabled. Services are actors, the UI state is `@MainActor @Observable`, and downloads use a shared `URLSession` fast path for small files plus a delegate session for large progress-tracked archives. No whole-file reads are used for assets.
+**Daten:** Alles liegt in `~/Library/Application Support/NeoCraft/`
+(State, Shared-Libraries, Runtime-JDKs, Instanzen, Logs). Tokens
+sicher im **macOS Keychain**, nie in `state.json`.
 
-### Native libraries
+---
 
-Only `natives-macos-arm64` classifiers are extracted. If a library publishes an arm64 counterpart, non-arm64 variants are skipped. A launch fails with a clear error if no arm64 native exists for the current version.
+## 🎮 Im Spiel
 
-## Configuration
+| Taste | Aktion |
+|---|---|
+| `Right Shift` | HUD-Editor öffnen |
+| `F8` | HUD an/aus |
 
-The Microsoft public client ID used for the device-code flow can be overridden for development:
+Performance-Defaults: `-Xmx4608M`, G1GC, `AlwaysPreTouch`, 60 FPS-Cap,
+10-Chunks Render-Distance — optimiert für passiv gekühlte MacBooks.
+Minecraft 1.20.5+ wird direkt in `options.txt` konfiguriert.
 
-```bash
-NEOCRAFT_MSA_CLIENT_ID="your-client-id" open build/NeoCraft.app
-```
+---
 
-Environment variables must be present in the app's environment; launching from Finder will not inherit shell variables. For a permanent override, change `defaultMSAClientID` in `Core/AppConstants.swift` and rebuild.
+## ⚠️ Warnungen & Hinweise
 
-## Troubleshooting
+- **Inoffizielle Software** — NeoCraft ist ein Community-Launcher, kein offizielles Mojang/Microsoft-Produkt. Nutzung auf eigene Gefahr.
+- **Keine Gewähr** — „as is" ohne Garantie. Details im Lizenz-Screen des Installers.
+- **Account nötig** — ein legitimer Minecraft: Java Edition-Account (Microsoft-Login) ist erforderlich.
+- **Ad-hoc signiert** — nicht notarisiert; Gatekeeper fragt beim ersten Start (Rechtsklick → Öffnen oder `xattr -cr`).
+- **Drittanbieter-Downloads** — JDKs, Libraries, Mods und Assets werden zur Laufzeit von Mojang, Adoptium, Fabric und Modrinth geladen — jeweils unter deren Lizenzen.
+- **Bedrock (Beta)** — benötigt macOS 27 und einen Microsoft-Account mit Minecraft für Windows.
 
-### The app opens but says "No Java runtime found"
+## 📜 Rechtliches
 
-Leave Java set to **Automatic** in Settings. NeoCraft downloads the correct Temurin JDK into `Application Support/NeoCraft/runtime` before the first launch. To test the download immediately, open **Settings → Java Runtime → Install Java 25**.
+Minecraft ist eine Marke von Mojang Synergies AB. NeoCraft steht in
+keiner Verbindung zu Mojang, Microsoft, Fabric oder Modrinth.
+Vollständige Hinweise: [`RELEASE_NOTES.md`](RELEASE_NOTES.md) und der
+Lizenz-Screen im Installer.
 
-### A launch fails with "Couldn't launch"
+## 🙏 Credits
 
-Open **Play → Console** or **Settings → Console** for the full log. The latest launch log is stored in `Application Support/NeoCraft/logs`. Common causes are an expired Microsoft session, a mod that does not support the instance's Minecraft/Fabric version, or a stale manual Java path.
-
-### A mod is missing after install
-
-Mods install into the selected instance. Check the instance shown in the Mod Library banner. Fabric mods require the instance loader to be Fabric; NeoCraft shows a clear message when it is not.
-
-### Reset the launcher
-
-Moving `Application Support/NeoCraft` to the Bin removes instances, shared libraries, runtimes and logs. Accounts remain in Keychain until removed in Settings or with Keychain Access.
-
-## Legal
-
-NeoCraft is an independent project. It is not affiliated with, endorsed by, or associated with Mojang Studios, Microsoft, Fabric, or Modrinth. Minecraft is a trademark of Mojang Synergies AB. You must own a legitimate Minecraft: Java Edition account to play.
-
-Third-party content and runtimes are downloaded from their official services under their respective licenses:
-
-- Minecraft metadata and assets: Mojang
-- Java runtime: Eclipse Temurin / Adoptium
-- Mod loader: Fabric MC
-- Mods and project metadata: Modrinth and their authors
-
-## Credits
-
-- **NeoCraft** — design, code and packaging by the NeoCraft project
+- **NeoCraft** — Design, Code & Packaging vom NeoCraft-Projekt
 - **Swift / SwiftUI** — Apple
-- **Fonts** — PressStart2P by CodeMan38, Silkscreen by Jason Kottke (both free for any use)
-- **dmgbuild** — dmgbuild/dmgbuild contributors (DMG packaging)
-- **Minecraft**, **Fabric**, **Modrinth** and all in-game content belong to their respective owners
+- **Fonts** — PressStart2P by CodeMan38 · Silkscreen by Jason Kottke
+- **dmgbuild** — dmgbuild contributors (DMG-Packaging)
+- **Minecraft, Fabric, Modrinth** — und alle In-Game-Inhalte gehören ihren jeweiligen Eigentümern
 
-## Warnings & notices
+---
 
-- **Unofficial software.** NeoCraft is a community launcher, not an official Mojang or Microsoft product. Use it at your own risk.
-- **No warranty.** The software is provided "as is" without warranty of any kind. See `RELEASE_NOTES.md` / the in-installer license for details.
-- **Account required.** A legitimate Minecraft: Java Edition account (Microsoft sign-in) is required; NeoCraft cannot bypass authentication.
-- **Ad-hoc signed.** Local builds are ad-hoc signed and not notarized. macOS Gatekeeper will warn on first launch — right-click → Open, or `xattr -cr`.
-- **Third-party downloads.** NeoCraft downloads runtimes, libraries, mods and assets from Mojang, Adoptium, Fabric and Modrinth at runtime; those are governed by their own licenses.
-- **Bedrock beta.** The bundled NeoCraft Bedrock component requires macOS 27 and a Microsoft account that owns Minecraft for Windows.
+<div align="center">
 
-## License
+**⛏️ Craft it. Play it. NeoCraft it.**
 
-The NeoCraft source in this repository is provided for personal use and learning. Respect the licenses of all downloaded third-party content.
+<sub>Made with Swift on Apple Silicon · Not affiliated with Mojang or Microsoft</sub>
+
+</div>
