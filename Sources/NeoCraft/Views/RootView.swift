@@ -111,6 +111,8 @@ struct RootView: View {
             InstancesView()
         case .servers:
             ServersView()
+        case .dashboard:
+            DashboardView()
         case .studio:
             StudioView()
         case .mods:
@@ -280,6 +282,12 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
 
+            if !model.hostedServers.isEmpty {
+                hostedServersGroup
+                    .padding(.horizontal, 10)
+                    .padding(.top, 14)
+            }
+
             Spacer(minLength: 12)
 
             if let instance = model.selectedInstance {
@@ -355,6 +363,8 @@ struct SidebarView: View {
                     badge("\(model.modUpdates.count)↑", selected: selected, tint: NeoPalette.amber, filled: true)
                 } else if section == .mods, !model.installedProjectIDs.isEmpty {
                     badge("\(model.installedProjectIDs.count)", selected: selected)
+                } else if section == .dashboard, !model.hostedServers.isEmpty {
+                    badge("\(model.hostedServers.count)", selected: selected)
                 } else if section == .play, model.isGameRunning {
                     StatusDot(color: NeoPalette.mint, size: 6)
                 } else if section == .mods, model.isSearchingMods {
@@ -407,6 +417,70 @@ struct SidebarView: View {
             )
         }
         return AnyShapeStyle(hovered ? Color.primary.opacity(0.07) : Color.clear)
+    }
+
+    /// Quick-jump list of hosted dedicated servers under the main sections.
+    private var hostedServersGroup: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("HOSTED SERVERS")
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .tracking(1.1)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 2)
+
+            ForEach(model.hostedServers.prefix(5)) { server in
+                hostedServerRow(server)
+            }
+            if model.hostedServers.count > 5 {
+                Button {
+                    model.go(to: .dashboard)
+                } label: {
+                    Text("+\(model.hostedServers.count - 5) more")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func hostedServerRow(_ server: HostedServer) -> some View {
+        let running = model.isServerRunning(server)
+        let ready = model.isServerReady(server)
+        let settingUp = model.isSettingUpServer(server)
+        let selected = model.section == .dashboard && model.dashboardServer?.id == server.id
+        let color: Color = settingUp ? NeoPalette.amber
+            : running ? (ready ? NeoPalette.mint : NeoPalette.sky)
+            : Color.secondary
+
+        return Button {
+            model.openServerDashboard(server)
+        } label: {
+            HStack(spacing: 8) {
+                StatusDot(color: color, size: 6)
+                Text(server.name)
+                    .font(.system(size: 11, weight: selected ? .semibold : .medium, design: .rounded))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(AppModel.serverAddress(server).split(separator: ":").last.map(String.init) ?? "")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? NeoPalette.accent.opacity(0.16) : Color.clear)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("\(server.name) — \(AppModel.serverAddress(server))")
     }
 
     private func instanceSummary(_ instance: GameInstance) -> some View {

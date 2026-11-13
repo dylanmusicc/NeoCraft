@@ -4,6 +4,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case play
     case instances
     case servers
+    case dashboard
     case studio
     case mods
     case screenshots
@@ -19,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .play: "play.circle.fill"
         case .instances: "square.stack.3d.up.fill"
         case .servers: "server.rack"
+        case .dashboard: "gauge.with.dots.needle.33percent"
         case .studio: "paintbrush.pointed.fill"
         case .mods: "shippingbox.fill"
         case .screenshots: "photo.stack.fill"

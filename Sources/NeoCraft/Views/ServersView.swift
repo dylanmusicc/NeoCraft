@@ -11,9 +11,11 @@ struct ServersView: View {
 
     @State private var entries: [MCServerEntry] = []
     @State private var pings: [UUID: ServerStatus] = [:]
+    @State private var hostedPings: [UUID: ServerStatus] = [:]
     @State private var editing: MCServerEntry?
     @State private var isAdding = false
     @State private var loadedInstanceID: UUID?
+    @State private var deletingServer: HostedServer?
 
     private var instance: GameInstance? { model.selectedInstance }
 
@@ -53,19 +55,198 @@ struct ServersView: View {
                     .frame(maxWidth: 320)
                 }
 
+                hostedCard
+
                 serversCard
             }
             .padding(28)
             .frame(maxWidth: 1100, alignment: .leading)
         }
         .scrollIndicators(.hidden)
-        .onAppear { reload() }
+        .onAppear {
+            reload()
+            model.refreshHostedServers()
+            pingHostedServers()
+        }
         .onChange(of: model.selectedInstanceID) { _, _ in reload() }
+        .onChange(of: model.runningServerIDs) { _, _ in pingHostedServers() }
         .sheet(isPresented: editorPresented) {
             ServerEntryEditorSheet(entry: editing) { saved in
                 upsert(saved)
             }
             .environment(model)
+        }
+        .confirmationDialog(
+            "Delete hosted server?",
+            isPresented: Binding(
+                get: { deletingServer != nil },
+                set: { if !$0 { deletingServer = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete \(deletingServer?.name ?? "server")", role: .destructive) {
+                if let server = deletingServer {
+                    model.deleteHostedServer(server)
+                }
+                deletingServer = nil
+            }
+            Button("Cancel", role: .cancel) { deletingServer = nil }
+        } message: {
+            Text("This removes the server folder and its copy of the world. The original world in the instance's saves is not affected.")
+        }
+    }
+
+    // MARK: - Hosted servers card
+
+    /// Worlds from the user's instances running as Java dedicated servers.
+    private var hostedCard: some View {
+        NeoCard {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(
+                    title: "Hosted Worlds",
+                    subtitle: "Press Host on a world in an instance's Worlds tab to run it as a Java dedicated server on this Mac.",
+                    symbol: "network"
+                )
+
+                if model.hostedServers.isEmpty {
+                    Text("No hosted servers yet.")
+                        .font(.neoCaption).foregroundStyle(.secondary)
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(model.hostedServers) { server in
+                            hostedRow(server)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func hostedRow(_ server: HostedServer) -> some View {
+        let running = model.isServerRunning(server)
+        let ready = model.isServerReady(server)
+        let settingUp = model.isSettingUpServer(server)
+        let address = AppModel.serverAddress(server)
+        let ping = hostedPings[server.id]
+
+        return HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(NeoPalette.accent.opacity(0.14))
+                Image(systemName: "server.rack")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(NeoPalette.accent)
+            }
+            .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Button {
+                        model.openServerDashboard(server)
+                    } label: {
+                        Text(server.name)
+                            .font(.neoHeadline)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .help("Open server dashboard")
+                    hostedStatusBadge(running: running, ready: ready, settingUp: settingUp)
+                }
+                Text("\(server.worldName) · Minecraft \(server.minecraftVersion) · from \(server.instanceName)")
+                    .font(.neoCaption).foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(address)
+                        .font(.neoCaption.weight(.semibold).monospacedDigit())
+                    Button {
+                        model.copyServerAddress(server)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Copy server address")
+                    if running, let ping, ping.reachable {
+                        Text("· \(ping.playersOnline)/\(ping.playersMax) players")
+                            .font(.neoCaption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if running {
+                Button("Stop") {
+                    model.stopHostedServer(server)
+                }
+                .buttonStyle(NeoButtonStyle(kind: .danger, compact: true))
+            } else {
+                Button(settingUp ? "Setting up…" : "Start") {
+                    model.startHostedServer(server)
+                }
+                .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+                .disabled(settingUp)
+            }
+
+            Button("Join") {
+                model.joinHostedServer(server)
+            }
+            .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+            .disabled(!running || model.isGameRunning)
+
+            Menu {
+                Button("Open Dashboard") {
+                    model.openServerDashboard(server)
+                }
+                Button("Sync World from Instance") {
+                    model.syncHostedServerWorld(server)
+                }
+                .disabled(running || settingUp || model.instance(for: server.instanceID) == nil)
+                Button("Copy Address") {
+                    model.copyServerAddress(server)
+                }
+                Button("Reveal Folder") {
+                    model.reveal(server.directory)
+                }
+                Divider()
+                Button("Delete Server", role: .destructive) {
+                    deletingServer = server
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 28)
+            .help("Server options")
+        }
+        .padding(12)
+        .neoCard(padding: 12)
+    }
+
+    @ViewBuilder
+    private func hostedStatusBadge(running: Bool, ready: Bool, settingUp: Bool) -> some View {
+        if settingUp {
+            NeoBadge(text: "Setting up", color: NeoPalette.amber)
+        } else if running {
+            NeoBadge(text: ready ? "Online" : "Starting", color: ready ? NeoPalette.mint : NeoPalette.sky)
+        } else {
+            NeoBadge(text: "Stopped", color: Color.secondary)
+        }
+    }
+
+    private func pingHostedServers() {
+        for server in model.hostedServers where model.isServerRunning(server) {
+            let address = AppModel.serverAddress(server)
+            Task {
+                let status = await ServerPinger.ping(address)
+                hostedPings[server.id] = status
+            }
         }
     }
 

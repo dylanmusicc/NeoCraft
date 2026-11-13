@@ -591,6 +591,7 @@ private struct WorldsTab: View {
 
     @State private var worlds: [WorldInfo] = []
     @State private var radarWorld: WorldInfo?
+    @State private var hostingWorld: WorldInfo?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -624,6 +625,14 @@ private struct WorldsTab: View {
         .sheet(item: radarBinding) { world in
             WorldRadarView(world: world).environment(model)
         }
+        .sheet(item: hostingBinding) { world in
+            HostWorldSheet(instance: instance, world: world)
+                .environment(model)
+        }
+    }
+
+    private var hostingBinding: Binding<WorldInfo?> {
+        Binding(get: { hostingWorld }, set: { hostingWorld = $0 })
     }
 
     private func worldRow(_ world: WorldInfo) -> some View {
@@ -648,6 +657,14 @@ private struct WorldsTab: View {
             }
             .controlSize(.small)
             .disabled(model.isGameRunning || model.isRunning(instance))
+            if instance.edition == .java {
+                Button("Host") {
+                    hostingWorld = world
+                }
+                .controlSize(.small)
+                .disabled(model.isRunning(instance))
+                .help("Host this world as a Java dedicated server")
+            }
             Button("Back Up") { model.backupWorlds(in: instance, world: world) }
                 .controlSize(.small)
                 .disabled(model.backupRunning)

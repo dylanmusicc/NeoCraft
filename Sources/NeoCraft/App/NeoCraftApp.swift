@@ -12,11 +12,18 @@ struct NeoCraftApp: App {
 
     var body: some Scene {
         WindowGroup("NeoCraft") {
-            RootView()
-                .environment(model)
-                .frame(minWidth: 1080, minHeight: 720)
+            if let request = SnapshotSupport.request {
+                SnapshotRenderView(request: request)
+                    .frame(width: 10, height: 10)
+            } else {
+                RootView()
+                    .environment(model)
+                    .frame(minWidth: 1080, minHeight: 720)
+            }
         }
-        .defaultSize(width: 1240, height: 820)
+        .defaultSize(width: SnapshotSupport.request == nil ? 1240 : 10,
+                     height: SnapshotSupport.request == nil ? 820 : 10)
+        .windowResizability(SnapshotSupport.request == nil ? .contentMinSize : .contentSize)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(after: .appInfo) {
@@ -382,5 +389,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Give hosted dedicated servers a moment to flush their worlds after
+        // `stop`; the service escalates to SIGTERM for anything still alive.
+        let manager = AppModel.shared.dedicatedServers
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached {
+            await manager.terminateAll()
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 25)
     }
 }

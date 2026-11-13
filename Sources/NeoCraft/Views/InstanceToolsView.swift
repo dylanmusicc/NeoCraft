@@ -5,6 +5,7 @@ import SwiftUI
 struct WorldBackupView: View {
     @Environment(AppModel.self) private var model
     @State private var radarWorld: WorldInfo?
+    @State private var hostingWorld: WorldInfo?
     let instance: GameInstance
 
     var body: some View {
@@ -62,6 +63,12 @@ struct WorldBackupView: View {
                                     .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
                                     .help("Seed & biome radar")
                                 }
+                                if instance.edition == .java {
+                                    Button("Host") { hostingWorld = world }
+                                        .controlSize(.small)
+                                        .disabled(model.isRunning(instance))
+                                        .help("Host this world as a Java dedicated server")
+                                }
                                 Button("Back Up") { model.backupWorlds(in: instance, world: world) }
                                     .disabled(model.backupRunning)
                             }
@@ -98,6 +105,14 @@ struct WorldBackupView: View {
             WorldRadarView(world: world)
                 .environment(model)
         }
+        .sheet(item: hostingBinding) { world in
+            HostWorldSheet(instance: instance, world: world)
+                .environment(model)
+        }
+    }
+
+    private var hostingBinding: Binding<WorldInfo?> {
+        Binding(get: { hostingWorld }, set: { hostingWorld = $0 })
     }
 
     private var radarBinding: Binding<WorldInfo?> {

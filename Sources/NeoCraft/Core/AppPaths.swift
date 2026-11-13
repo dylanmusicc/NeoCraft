@@ -18,6 +18,7 @@ enum AppPaths {
     static var versions: URL { shared.appendingPathComponent("versions", isDirectory: true) }
     static var runtime: URL { root.appendingPathComponent("runtime", isDirectory: true) }
     static var instances: URL { root.appendingPathComponent("instances", isDirectory: true) }
+    static var servers: URL { root.appendingPathComponent("servers", isDirectory: true) }
     static var cache: URL { root.appendingPathComponent("cache", isDirectory: true) }
     static var logs: URL { root.appendingPathComponent("logs", isDirectory: true) }
     static var skins: URL { root.appendingPathComponent("skins", isDirectory: true) }
@@ -43,6 +44,10 @@ enum AppPaths {
         instanceDirectory(id).appendingPathComponent("neocraft", isDirectory: true)
     }
 
+    static func serverDirectory(_ id: UUID) -> URL {
+        servers.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
     static func installedManifest(_ id: UUID) -> URL {
         instanceMetadataDirectory(id).appendingPathComponent("installed.json", isDirectory: false)
     }
@@ -59,7 +64,7 @@ enum AppPaths {
 
     static let allDirectories: [URL] = [
         root, shared, libraries, assets, assetObjects, assetIndexes, assetVirtual,
-        logConfigs, versions, runtime, instances, cache, logs, skins
+        logConfigs, versions, runtime, instances, servers, cache, logs, skins
     ]
 
     @discardableResult

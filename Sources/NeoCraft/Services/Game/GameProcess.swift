@@ -63,6 +63,7 @@ actor GameProcess {
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
+    private var stdinPipe: Pipe?
     private var stdoutDecoder = UTF8StreamDecoder()
     private var stderrDecoder = UTF8StreamDecoder()
     private var outputHandler: (@Sendable (String, ConsoleLevel) -> Void)?
@@ -88,7 +89,9 @@ actor GameProcess {
         process.arguments = command.arguments
         process.currentDirectoryURL = command.workingDirectory
         process.environment = command.environment
-        process.standardInput = FileHandle.nullDevice
+
+        let stdinPipe = Pipe()
+        process.standardInput = stdinPipe
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -123,17 +126,27 @@ actor GameProcess {
         self.process = process
         self.stdoutPipe = stdoutPipe
         self.stderrPipe = stderrPipe
+        self.stdinPipe = stdinPipe
         exitCode = nil
 
         do {
             try process.run()
         } catch {
             self.process = nil
+            self.stdinPipe = nil
             outputHandler = nil
             stdoutPipe.fileHandleForReading.readabilityHandler = nil
             stderrPipe.fileHandleForReading.readabilityHandler = nil
             throw error
         }
+    }
+
+    /// Writes a line to the child's stdin — used by dedicated servers for
+    /// commands like `stop`, `say` or `op`. No-op when nothing is running.
+    func sendInput(_ line: String) {
+        guard let stdinPipe, process?.isRunning == true else { return }
+        let data = Data((line + "\n").utf8)
+        try? stdinPipe.fileHandleForWriting.write(contentsOf: data)
     }
 
     func waitForExit() async -> Int32 {
@@ -189,6 +202,7 @@ actor GameProcess {
         try? stderrPipe?.fileHandleForReading.close()
         stdoutPipe = nil
         stderrPipe = nil
+        stdinPipe = nil
         process = nil
         exitContinuation?.resume(returning: status)
         exitContinuation = nil

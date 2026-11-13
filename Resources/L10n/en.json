@@ -5,6 +5,8 @@
   "nav.instances.subtitle": "Isolated worlds, versions and mods",
   "nav.servers.title": "Servers",
   "nav.servers.subtitle": "Multiplayer server lists and quick joins",
+  "nav.dashboard.title": "Dashboard",
+  "nav.dashboard.subtitle": "Hosted worlds running as dedicated servers",
   "nav.studio.title": "Studio",
   "nav.studio.subtitle": "Launcher themes, wallpaper, dashboard and audio",
   "nav.mods.title": "Mod Library",

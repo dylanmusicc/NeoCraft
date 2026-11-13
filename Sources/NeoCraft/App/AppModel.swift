@@ -54,7 +54,15 @@ final class AppModel {
 
     // MARK: - Navigation and presentation
 
-    var section: AppSection = .play
+    /// Initial page — `NEOCRAFT_SECTION=<rawValue>` overrides it for
+    /// screenshots and UI automation.
+    var section: AppSection = {
+        if let raw = ProcessInfo.processInfo.environment["NEOCRAFT_SECTION"],
+           let section = AppSection(rawValue: raw) {
+            return section
+        }
+        return .play
+    }()
     var showConsole = false
     var showAuthSheet = false
     var showOfflineAccountSheet = false
@@ -70,6 +78,22 @@ final class AppModel {
     var toast: String?
     var crashDiagnosis: CrashDiagnosis?
     var backupRunning = false
+    /// Hosted dedicated servers (world → Java server) discovered on disk.
+    var hostedServers: [HostedServer] = []
+    /// Server ids with a live dedicated-server process (starting or online).
+    var runningServerIDs: Set<UUID> = []
+    /// Server ids whose process printed the "Done" ready line.
+    var readyServerIDs: Set<UUID> = []
+    /// Server ids still being set up (jar download + world copy).
+    var serverSetupIDs: Set<UUID> = []
+    /// Hosted server shown in the dashboard sheet.
+    var dashboardServer: HostedServer?
+    /// Per-server console buffers for the dashboard's live log view.
+    var serverConsoles: [UUID: [ConsoleEntry]] = [:]
+    /// Player names seen joining/leaving in each server's console output.
+    var serverPlayers: [UUID: [String]] = [:]
+    /// When each running server's process was started (for uptime display).
+    var serverStartedAt: [UUID: Date] = [:]
     var upgradingInstanceID: UUID?
     var upgradeResults: [UUID: [ModCompatibility]] = [:]
     var consoleFilter = ""
@@ -170,6 +194,7 @@ final class AppModel {
     let modrinth: ModrinthService
     let modInstaller: ModInstaller
     let gameProcess: GameProcess
+    let dedicatedServers: DedicatedServerService
     let metrics: SystemMetricsProvider
 
     // MARK: - Private
@@ -187,6 +212,8 @@ final class AppModel {
     private var hudWatcherSource: (any DispatchSourceFileSystemObject)?
     private var hudWatchedConfigURL: URL?
     private var hudLastHandledModification: Date?
+    /// Per-server log files mirroring the dashboard console to disk.
+    private var serverLogWriters: [UUID: GameLogWriter] = [:]
 
     init() {
         let versions = VersionService()
@@ -201,6 +228,7 @@ final class AppModel {
         self.modrinth = modrinth
         self.modInstaller = ModInstaller(modrinth: modrinth)
         self.gameProcess = GameProcess()
+        self.dedicatedServers = DedicatedServerService(versions: versions)
         self.metrics = SystemMetricsProvider()
 
         let store = Persistence.load()
@@ -314,6 +342,12 @@ final class AppModel {
 
     func bootstrap() async {
         isBootstrapping = true
+        hostedServers = HostedServerStore.discover()
+        await dedicatedServers.setExitHandler { [weak self] id, status in
+            Task { @MainActor in
+                self?.handleServerExit(id: id, status: status)
+            }
+        }
         await loadJavaRuntimes()
         async let catalogLoad: Void = reloadCatalog()
         async let patchNoteLoad: Void = loadPatchNotes()
@@ -322,6 +356,10 @@ final class AppModel {
         selectionDidChange()
         StudioTheme.refreshBiomeAccent()
         isBootstrapping = false
+        // Servers flagged "Start with NeoCraft" boot after the UI is up.
+        for server in hostedServers where server.autoStart {
+            startHostedServer(server)
+        }
     }
 
     func reloadCatalog() async {
@@ -964,10 +1002,10 @@ final class AppModel {
 
     private func resolveJava(
         requiredMajor: Int,
-        instance: GameInstance,
+        preferredJavaPath: String?,
         progress: @escaping @Sendable (ProgressUpdate) -> Void
     ) async throws -> JavaRuntime {
-        if let path = instance.javaPath, !path.isEmpty {
+        if let path = preferredJavaPath, !path.isEmpty {
             guard let runtime = await java.runtime(executablePath: path) else {
                 throw AppError.invalidJava(path)
             }
@@ -1041,7 +1079,7 @@ final class AppModel {
                 self.persistLoaderVersion(resolved.fabricLoaderVersion, for: instance)
                 let runtime = try await self.resolveJava(
                     requiredMajor: resolved.details.requiredJavaMajor,
-                    instance: instance
+                    preferredJavaPath: instance.javaPath
                 ) { update in
                     Task { @MainActor in
                         self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
@@ -1211,7 +1249,7 @@ final class AppModel {
 
         let runtime = try await resolveJava(
             requiredMajor: resolved.details.requiredJavaMajor,
-            instance: instance
+            preferredJavaPath: instance.javaPath
         ) { update in
             Task { @MainActor in
                 self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
@@ -1528,6 +1566,495 @@ final class AppModel {
 
     func revealBackup(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: - Hosted servers (world → Java dedicated server)
+
+    /// `host:port` friends on the LAN type into Minecraft's multiplayer screen.
+    static func serverAddress(_ server: HostedServer) -> String {
+        "\(LANAddress.primaryIPv4 ?? "localhost"):\(server.port)"
+    }
+
+    func isServerRunning(_ server: HostedServer) -> Bool {
+        runningServerIDs.contains(server.id)
+    }
+
+    func isServerReady(_ server: HostedServer) -> Bool {
+        readyServerIDs.contains(server.id)
+    }
+
+    func isSettingUpServer(_ server: HostedServer) -> Bool {
+        serverSetupIDs.contains(server.id)
+    }
+
+    func refreshHostedServers() {
+        hostedServers = HostedServerStore.discover()
+    }
+
+    /// Packages a single-player world as a Java dedicated server: downloads
+    /// Mojang's server jar for the instance's version, copies the save and
+    /// writes eula.txt/server.properties into a fresh server folder.
+    func hostWorld(
+        _ world: WorldInfo,
+        in instance: GameInstance,
+        name: String,
+        port: Int,
+        onlineMode: Bool
+    ) {
+        guard instance.edition == .java else {
+            alert = AppAlert(
+                title: "Java Edition only",
+                message: "Bedrock worlds can't be hosted as a Minecraft Java server."
+            )
+            return
+        }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        guard (1...65535).contains(port) else {
+            alert = AppAlert(title: "Invalid port", message: "The server port must be between 1 and 65535.")
+            return
+        }
+
+        let server = HostedServer(
+            name: trimmedName,
+            instanceID: instance.id,
+            instanceName: instance.name,
+            minecraftVersion: instance.minecraftVersion,
+            worldName: world.name,
+            sourceWorldName: world.name,
+            port: port,
+            onlineMode: onlineMode
+        )
+        hostedServers.insert(server, at: 0)
+        serverSetupIDs.insert(server.id)
+        let activity = beginActivity("Setting up \(server.name)", detail: "Preparing dedicated server…")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.serverSetupIDs.remove(server.id) }
+            do {
+                try await self.dedicatedServers.create(server: server, instance: instance) { update in
+                    Task { @MainActor in
+                        self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
+                    }
+                }
+                self.hostedServers = HostedServerStore.discover()
+                self.finishActivity(
+                    activity,
+                    success: true,
+                    detail: "Ready — press Start to open it to players"
+                )
+                self.showToast("\(server.name) is ready to host")
+                SoundManager.shared.play(.chime)
+                self.refreshStorageUsage()
+            } catch {
+                self.hostedServers.removeAll { $0.id == server.id }
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't set up \(server.name)", error)
+            }
+        }
+    }
+
+    /// Boots the dedicated server with the owning instance's Java preference
+    /// (falling back to the global Java setting) and its memory profile.
+    func startHostedServer(_ server: HostedServer) {
+        guard !runningServerIDs.contains(server.id),
+              !serverSetupIDs.contains(server.id) else { return }
+        runningServerIDs.insert(server.id)
+        readyServerIDs.remove(server.id)
+        let activity = beginActivity("Starting \(server.name)", detail: "Launching dedicated server…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let details = try await self.versions.details(for: server.minecraftVersion)
+                let instance = self.instance(for: server.instanceID)
+                let runtime = try await self.resolveJava(
+                    requiredMajor: details.requiredJavaMajor,
+                    preferredJavaPath: instance?.javaPath
+                ) { update in
+                    Task { @MainActor in
+                        self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
+                    }
+                }
+                let memory = min(max(instance?.effectiveMemoryMB ?? self.settings.maxMemoryMB, 1024), 6144)
+                let logURL = AppPaths.logs.appendingPathComponent(
+                    "server-\(server.name.replacingOccurrences(of: "/", with: "-"))-\(Int(Date().timeIntervalSince1970)).log",
+                    isDirectory: false
+                )
+                let writer = try? GameLogWriter(url: logURL)
+                self.serverLogWriters[server.id] = writer
+                writer?.write("NeoCraft \(AppConstants.version) · dedicated server · Minecraft \(server.minecraftVersion)\n")
+                writer?.write("Address: \(Self.serverAddress(server))\n\n")
+                _ = try await self.dedicatedServers.start(
+                    server: server,
+                    java: runtime,
+                    memoryMB: memory,
+                    minMemoryMB: self.settings.minMemoryMB
+                ) { text, level in
+                    Task { @MainActor in
+                        self.appendServerOutput(server.id, text: text, level: level)
+                        writer?.write(text)
+                        if text.contains("Done (") && text.contains("help") {
+                            self.readyServerIDs.insert(server.id)
+                            self.updateActivity(
+                                activity,
+                                fraction: 1,
+                                detail: "Online at \(Self.serverAddress(server))"
+                            )
+                        }
+                    }
+                }
+                self.serverStartedAt[server.id] = Date()
+                self.finishActivity(
+                    activity,
+                    success: true,
+                    detail: "Running at \(Self.serverAddress(server))"
+                )
+                self.showToast("\(server.name) is running — join at \(Self.serverAddress(server))")
+                if self.settings.openConsoleOnLaunch {
+                    self.showConsole = true
+                }
+            } catch {
+                self.runningServerIDs.remove(server.id)
+                self.readyServerIDs.remove(server.id)
+                self.serverStartedAt[server.id] = nil
+                self.serverLogWriters[server.id]?.close()
+                self.serverLogWriters[server.id] = nil
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't start \(server.name)", error)
+            }
+        }
+    }
+
+    /// Sends `stop` to the server so it saves its world before exiting.
+    func stopHostedServer(_ server: HostedServer) {
+        guard runningServerIDs.contains(server.id) else { return }
+        appendConsole("Stopping server \(server.name)…", level: .warning)
+        Task { [weak self] in
+            await self?.dedicatedServers.stop(server.id)
+            self?.runningServerIDs.remove(server.id)
+            self?.readyServerIDs.remove(server.id)
+        }
+    }
+
+    /// Stops (if needed) and immediately starts the server again.
+    func restartHostedServer(_ server: HostedServer) {
+        guard runningServerIDs.contains(server.id) else {
+            startHostedServer(server)
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.dedicatedServers.stop(server.id)
+            self.runningServerIDs.remove(server.id)
+            self.readyServerIDs.remove(server.id)
+            self.startHostedServer(server)
+        }
+    }
+
+    /// Runs a command on the server console (`say`, `list`, `save-all`, …).
+    func sendServerCommand(_ server: HostedServer, _ command: String) {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, runningServerIDs.contains(server.id) else { return }
+        appendServerLine(server.id, "> \(trimmed)", level: .info)
+        Task {
+            await dedicatedServers.sendCommand(server.id, trimmed)
+        }
+    }
+
+    func clearServerConsole(_ server: HostedServer) {
+        serverConsoles[server.id] = []
+    }
+
+    /// Reads the server's current `server.properties` for the dashboard form.
+    func serverProperties(for server: HostedServer) async -> [String: String] {
+        await dedicatedServers.properties(for: server)
+    }
+
+    /// Writes dashboard edits back to `server.properties` (server must be
+    /// stopped — a running server would overwrite them on shutdown).
+    func updateServerProperties(_ server: HostedServer, values: [String: String]) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.updateProperties(server, values: values)
+                // Keep the launcher's address/join metadata in sync when the
+                // dashboard edits the port.
+                if let portText = values["server-port"],
+                   let port = Int(portText), (1...65535).contains(port), port != server.port {
+                    var updated = server
+                    updated.port = port
+                    try? HostedServerStore.save(updated)
+                    if let index = self.hostedServers.firstIndex(where: { $0.id == server.id }) {
+                        self.hostedServers[index] = updated
+                    }
+                    if self.dashboardServer?.id == server.id {
+                        self.dashboardServer = updated
+                    }
+                }
+                self.showToast("Server settings saved — restart to apply")
+            } catch {
+                self.presentError("Couldn't update server settings", error)
+            }
+        }
+    }
+
+    /// Re-copies the single-player save over the hosted world — use after
+    /// playing more in single player. Only while the server is stopped.
+    func syncHostedServerWorld(_ server: HostedServer) {
+        guard let instance = instance(for: server.instanceID) else {
+            showToast("The original instance is gone — the world can't be re-synced")
+            return
+        }
+        guard !runningServerIDs.contains(server.id) else {
+            showToast("Stop the server before syncing the world")
+            return
+        }
+        let activity = beginActivity("Syncing \(server.name)", detail: "Copying world from \(instance.name)…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.syncWorld(server: server, instance: instance)
+                self.finishActivity(activity, success: true, detail: "World re-synced")
+                self.showToast("World re-synced from \(instance.name)")
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't sync \(server.name)", error)
+            }
+        }
+    }
+
+    /// Deletes the server folder entirely. A running server is stopped first.
+    func deleteHostedServer(_ server: HostedServer) {
+        Task { [weak self] in
+            guard let self else { return }
+            if self.runningServerIDs.contains(server.id) {
+                await self.dedicatedServers.stop(server.id)
+                self.runningServerIDs.remove(server.id)
+                self.readyServerIDs.remove(server.id)
+            }
+            do {
+                try HostedServerStore.delete(server)
+                self.hostedServers.removeAll { $0.id == server.id }
+                self.serverConsoles[server.id] = nil
+                self.serverPlayers[server.id] = nil
+                self.serverStartedAt[server.id] = nil
+                self.serverLogWriters[server.id]?.close()
+                self.serverLogWriters[server.id] = nil
+                if self.dashboardServer?.id == server.id {
+                    self.dashboardServer = nil
+                }
+                self.showToast("Deleted \(server.name)")
+            } catch {
+                self.presentError("Couldn't delete \(server.name)", error)
+            }
+        }
+    }
+
+    /// Quick-joins a running hosted server through the owning instance.
+    func joinHostedServer(_ server: HostedServer) {
+        guard runningServerIDs.contains(server.id) else {
+            showToast("Start the server first")
+            return
+        }
+        guard let instance = instance(for: server.instanceID)
+            ?? instances.first(where: { $0.edition == .java }) else {
+            alert = AppAlert(title: "No instance", message: "Create a Java instance before joining a hosted server.")
+            return
+        }
+        selectInstance(instance)
+        startGame(instance, quickPlay: Self.serverAddress(server))
+    }
+
+    func copyServerAddress(_ server: HostedServer) {
+        copyToClipboard(Self.serverAddress(server), label: "Server address copied")
+    }
+
+    /// Opens the Server Dashboard page with `server` selected.
+    func openServerDashboard(_ server: HostedServer) {
+        dashboardServer = server
+        go(to: .dashboard)
+    }
+
+    /// Persists the per-server "Start with NeoCraft" flag.
+    func setServerAutoStart(_ server: HostedServer, _ enabled: Bool) {
+        var updated = server
+        updated.autoStart = enabled
+        do {
+            try HostedServerStore.save(updated)
+        } catch {
+            presentError("Couldn't save server settings", error)
+            return
+        }
+        if let index = hostedServers.firstIndex(where: { $0.id == server.id }) {
+            hostedServers[index] = updated
+        }
+        if dashboardServer?.id == server.id {
+            dashboardServer = updated
+        }
+        showToast(enabled ? "\(server.name) starts with NeoCraft" : "\(server.name) won't auto-start")
+    }
+
+    // MARK: - Dashboard file browser & world backups
+
+    /// Immediate children of `directory` inside the server folder.
+    func serverFiles(for server: HostedServer, in directory: URL? = nil) async -> [ServerFileEntry] {
+        let target = directory ?? server.directory
+        return (try? await dedicatedServers.files(in: target, for: server)) ?? []
+    }
+
+    /// Text preview of a file inside the server folder (nil = binary/too big).
+    func serverFileText(_ url: URL, for server: HostedServer) async -> String? {
+        await dedicatedServers.readTextFile(url, for: server)
+    }
+
+    func deleteServerFile(_ url: URL, for server: HostedServer) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.deleteFile(url, for: server)
+                self.showToast("Deleted \(url.lastPathComponent)")
+            } catch {
+                self.presentError("Couldn't delete \(url.lastPathComponent)", error)
+            }
+        }
+    }
+
+    /// World snapshots inside `server.backupsDirectory`, newest first.
+    func serverBackups(for server: HostedServer) async -> [URL] {
+        await dedicatedServers.backups(for: server)
+    }
+
+    /// Copies the hosted world into `backups/` — server must be stopped.
+    func backupServerWorld(_ server: HostedServer) {
+        let activity = beginActivity("Backing up \(server.name)", detail: "Copying world…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.dedicatedServers.backupWorld(server: server)
+                self.finishActivity(activity, success: true, detail: "Backup created")
+                self.showToast("World backup created")
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't back up \(server.name)", error)
+            }
+        }
+    }
+
+    /// Replaces the hosted world with a backup — server must be stopped.
+    func restoreServerBackup(_ server: HostedServer, backup: URL) {
+        let activity = beginActivity("Restoring \(server.name)", detail: "Copying backup…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.restoreBackup(server: server, backup: backup)
+                self.finishActivity(activity, success: true, detail: "World restored")
+                self.showToast("World restored from backup")
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't restore backup", error)
+            }
+        }
+    }
+
+    func deleteServerBackup(_ server: HostedServer, backup: URL) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.deleteBackup(backup, for: server)
+                self.showToast("Backup deleted")
+            } catch {
+                self.presentError("Couldn't delete backup", error)
+            }
+        }
+    }
+
+    private func handleServerExit(id: UUID, status: Int32) {
+        runningServerIDs.remove(id)
+        readyServerIDs.remove(id)
+        serverStartedAt[id] = nil
+        serverPlayers[id] = []
+        serverLogWriters[id]?.write("\n[NeoCraft] Server exited with status \(status).\n")
+        serverLogWriters[id]?.close()
+        serverLogWriters[id] = nil
+        guard let server = hostedServers.first(where: { $0.id == id }) else { return }
+        appendConsole(
+            status == 0
+                ? "Server \(server.name) stopped."
+                : "Server \(server.name) exited with status \(status).",
+            level: status == 0 ? .info : .error
+        )
+    }
+
+    // MARK: Server console helpers
+
+    /// Appends one logical line to a hosted server's dashboard console and
+    /// mirrors it into the shared game console.
+    private func appendServerLine(_ id: UUID, _ line: String, level: ConsoleLevel) {
+        appendConsole("[\(hostedServers.first(where: { $0.id == id })?.name ?? "server")] \(line)", level: level)
+        var entries = serverConsoles[id] ?? []
+        entries.append(ConsoleEntry(line, level: level))
+        if entries.count > 1_500 {
+            entries.removeFirst(entries.count - 1_500)
+        }
+        serverConsoles[id] = entries
+    }
+
+    /// Splits raw process output into lines for the dashboard console,
+    /// tracks joins/leaves for the player list and mirrors to the writer.
+    private func appendServerOutput(_ id: UUID, text: String, level: ConsoleLevel) {
+        appendGameOutput(text, defaultLevel: level)
+        var entries = serverConsoles[id] ?? []
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            parseServerPlayerLine(line, serverID: id)
+            entries.append(ConsoleEntry(line, level: level))
+        }
+        if entries.count > 1_500 {
+            entries.removeFirst(entries.count - 1_500)
+        }
+        serverConsoles[id] = entries
+    }
+
+    /// Vanilla servers log `<name> joined the game` / `left the game` on the
+    /// Server thread — the dashboard turns those into a live player list.
+    private func parseServerPlayerLine(_ line: String, serverID: UUID) {
+        if let range = line.range(of: " joined the game") {
+            if let name = serverPlayerName(from: String(line[..<range.lowerBound])) {
+                addServerPlayer(name, serverID: serverID)
+            }
+        } else if let range = line.range(of: " left the game") {
+            if let name = serverPlayerName(from: String(line[..<range.lowerBound])) {
+                removeServerPlayer(name, serverID: serverID)
+            }
+        }
+    }
+
+    /// Extracts the player name from a log prefix like
+    /// `[13:37:00] [Server thread/INFO]: Notch`.
+    private func serverPlayerName(from prefix: String) -> String? {
+        var name = prefix
+        if let index = name.lastIndex(of: "]") {
+            name = String(name[name.index(after: index)...])
+        }
+        name = name.trimmingCharacters(in: .whitespaces)
+        if name.hasPrefix(":") {
+            name = String(name.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+        return name.isEmpty ? nil : name
+    }
+
+    private func addServerPlayer(_ name: String, serverID: UUID) {
+        var players = serverPlayers[serverID] ?? []
+        guard !players.contains(name) else { return }
+        players.append(name)
+        serverPlayers[serverID] = players
+    }
+
+    private func removeServerPlayer(_ name: String, serverID: UUID) {
+        guard var players = serverPlayers[serverID] else { return }
+        players.removeAll { $0 == name }
+        serverPlayers[serverID] = players
     }
 
     // MARK: - Smart upgrade
