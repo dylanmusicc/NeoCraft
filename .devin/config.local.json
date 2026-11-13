@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Exec(swift build)",
+      "Exec(wc)",
+      "Exec(git log)",
+      "Exec(sed)",
+      "Exec(grep)",
+      "Exec(xcode-select)"
+    ]
+  }
+}

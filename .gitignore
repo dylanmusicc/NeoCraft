@@ -1,0 +1,13 @@
+.build/
+build/
+.DS_Store
+*.log
+*.xcuserstate
+/tmp/
+Mods/NeoCraftHUD/.gradle/
+Mods/NeoCraftHUD/build/
+
+# Build-Artefakte des NeoCraft-Bedrock-Bundles (werden von build.sh
+# automatisch erzeugt und ins Launcher-.app kopiert)
+Sources/NeoCraft Bedrock/dist/
+Sources/NeoCraft Bedrock/.build/

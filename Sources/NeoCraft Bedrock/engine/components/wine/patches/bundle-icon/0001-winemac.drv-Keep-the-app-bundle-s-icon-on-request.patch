@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: SiliconBedrock <siliconbedrock@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 12:00:00 +0100
+Subject: [PATCH] winemac.drv: Keep the app bundle's icon on request.
+
+With WINEMAC_KEEP_BUNDLE_ICON set, the driver doesn't replace the Dock icon with the executable's:
+a Windows program started from an app bundle keeps that app's icon.
+
+Original work for SiliconBedrock (LGPL-2.1-or-later).
+
+Topic: bundle-icon
+---
+ dlls/winemac.drv/window.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winemac.drv/window.c b/dlls/winemac.drv/window.c
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -935,7 +935,12 @@ void activate_on_following_focus(void)
+  */
+ static void set_app_icon(void)
+ {
+-    CFArrayRef images = create_app_icon_images();
++    CFArrayRef images;
++
++    /* Keep the icon of the enclosing app bundle instead of the executable's. */
++    if (getenv("WINEMAC_KEEP_BUNDLE_ICON")) return;
++
++    images = create_app_icon_images();
+     if (images)
+     {
+         macdrv_set_application_icon(images);
+-- 
+2.50.1

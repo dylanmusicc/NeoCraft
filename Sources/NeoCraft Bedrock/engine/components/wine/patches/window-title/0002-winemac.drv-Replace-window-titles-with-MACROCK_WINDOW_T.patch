@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: SiliconBedrock <siliconbedrock@users.noreply.github.com>
+Date: Mon, 2 Nov 2026 12:00:00 +0100
+Subject: [PATCH] winemac.drv: Replace window titles with MACROCK_WINDOW_TITLE.
+
+With MACROCK_WINDOW_TITLE=<text>, non-empty window titles become the text, so that a game shows
+the name its launcher gives it.
+
+Original work for SiliconBedrock (LGPL-2.1-or-later).
+
+Topic: window-title
+---
+ dlls/winemac.drv/cocoa_window.m | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/dlls/winemac.drv/cocoa_window.m b/dlls/winemac.drv/cocoa_window.m
+--- a/dlls/winemac.drv/cocoa_window.m
++++ b/dlls/winemac.drv/cocoa_window.m
+@@ -3232,6 +3232,21 @@ void macdrv_set_cocoa_window_state(macdrv_window w,
+     return suffix;
+ }
+ 
++/* MACROCK_WINDOW_TITLE, shown instead of non-empty window titles: nil when unset, empty or not
++ * valid UTF-8. */
++static NSString* window_title_override(void)
++{
++    static NSString* title;
++    static dispatch_once_t once;
++
++    dispatch_once(&once, ^{
++        const char* value = getenv("MACROCK_WINDOW_TITLE");
++        if (value && *value)
++            title = [[NSString alloc] initWithUTF8String:value];
++    });
++    return title;
++}
++
+ /***********************************************************************
+  *              macdrv_set_cocoa_window_title
+  *
+@@ -3245,6 +3260,7 @@ void macdrv_set_cocoa_window_title(macdrv_window w, const unsigned short* title,
+     WineWindow* window = (WineWindow*)w;
+     NSString* titleString;
+     NSString* suffix = window_title_suffix();
++    NSString* override = window_title_override();
+ 
+     if (title)
+         titleString = [NSString stringWithCharacters:title length:length];
+@@ -3252,6 +3268,8 @@ void macdrv_set_cocoa_window_title(macdrv_window w, const unsigned short* title,
+         titleString = @"";
+     if (suffix && [titleString length])
+         titleString = [titleString stringByAppendingString:suffix];
++    if (override && [titleString length])
++        titleString = override;
+     OnMainThreadAsync(^{
+         [window setTitle:titleString];
+         if ([window isOrderedIn] && ![window isExcludedFromWindowsMenu])

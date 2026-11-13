@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "neocraft-hud",
+  "version": "1.0.0",
+  "name": "NeoCraft HUD",
+  "description": "Renders the NeoCraft Studio HUD widgets inside Minecraft with hot-reload, plus the in-game HUD editor.",
+  "authors": ["NeoCraft"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/neocraft-hud/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.neocraft.hud.NeoCraftHUDClient"]
+  },
+  "mixins": ["neocraft-hud.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": ">=26.3",
+    "fabric-api": ">=0.161.0",
+    "java": ">=25"
+  }
+}
