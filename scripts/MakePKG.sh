@@ -235,29 +235,75 @@ zu Mojang, Microsoft, Fabric oder Modrinth.
 EOF
 
 cat > "$RES/license.txt" <<EOF
-NeoCraft ${VERSION} — Lizenz- und Haftungshinweis
+NeoCraft ${VERSION} — Lizenz, Credits & Rechtliches
 
-Der NeoCraft-Quellcode in diesem Repository steht zur persönlichen
-Nutzung und zum Lernen zur Verfügung.
+================================================================
+WARNUNGEN
+================================================================
 
-NeoCraft ist ein unabhängiges Projekt. Es besteht keine Verbindung,
-Billigung oder Partnerschaft mit Mojang Studios, Microsoft, Fabric
-oder Modrinth. Minecraft ist eine Marke von Mojang Synergies AB.
-Zum Spielen ist ein legitimer Minecraft: Java Edition-Account
-erforderlich.
+- BETA-FUNKTIONEN: NeoCraft enthält experimentelle Beta-Features
+  (In-Game HUD/UI, World Radar, Custom Launch Args, Bedrock Edition,
+  Bedrock Server Hosting). Diese sind instabil, können Speicherstände
+  beschädigen oder sich ohne Vorankündigung ändern. Die App fragt vor
+  dem Aktivieren jeder Beta-Funktion nach einer Bestätigung — die
+  Nutzung erfolgt auf eigene Gefahr.
 
-Von NeoCraft oder durch die Nutzung der Software geladene
-Drittanbieter-Inhalte und -Laufzeiten unterliegen ihren jeweiligen
-Lizenzen:
+- INOFFIZIELLE SOFTWARE: NeoCraft ist ein unabhängiges Community-
+  Projekt. Es besteht keine Verbindung, Billigung oder Partnerschaft
+  mit Mojang Studios, Microsoft, Fabric MC oder Modrinth. Minecraft
+  ist eine Marke von Mojang Synergies AB.
 
-- Minecraft-Metadaten und Assets: Mojang
-- Java-Laufzeit: Eclipse Temurin / Adoptium
-- Mod-Loader: Fabric MC
-- Mods und Projektdaten: Modrinth und deren Autorinnen und Autoren
+- ACCOUNT: Zum Spielen ist ein legitimer Minecraft-Account
+  (Microsoft-Login) erforderlich, der das jeweilige Spiel besitzt.
 
-Die Software wird "wie besehen" ohne Gewährleistung jeglicher Art
-bereitgestellt. In keinem Fall haften die Autorinnen und Autoren für
-Schäden, die aus der Nutzung entstehen.
+- SERVER-HOSTING: Vom Nutzer gehostete Server (Java Dedicated Server,
+  Bedrock Dedicated Server über Wine) sind für den persönlichen,
+  nicht-kommerziellen Gebrauch gedacht. Für öffentliche Server mit
+  Monetarisierung oder vielen Spielern können zusätzliche Lizenzen
+  oder Mojang-Richtlinien gelten — der Nutzer ist allein verantwortlich.
+
+- DRITTANBIETER-INHALTE: Zur Laufzeit werden Java-Laufzeiten, Mods,
+  Resource Packs, Server-Software und Assets von Mojang, Adoptium,
+  Fabric, Modrinth und weiteren Quellen geladen. Diese Inhalte
+  unterliegen ihren jeweiligen Lizenzen und wurden nicht von NeoCraft
+  geprüft oder gebilligt.
+
+================================================================
+LIZENZ DES QUELLCODES
+================================================================
+
+Der NeoCraft-Quellcode steht zur persönlichen Nutzung, zum Lernen
+und zu nicht-kommerziellen Zwecken zur Verfügung. Eine kommerzielle
+Nutzung oder Weiterverbreitung ohne vorherige schriftliche Zustimmung
+der Autorinnen und Autoren ist nicht gestattet.
+
+================================================================
+CREDITS
+================================================================
+
+- NeoCraft — Design, Code & Packaging vom NeoCraft-Projekt
+- Swift / SwiftUI — Apple Inc.
+- Schriften: PressStart2P by CodeMan38, Silkscreen by Jason Kottke
+- dmgbuild — dmgbuild/dmgbuild-Mitwirkende (DMG-Packaging)
+- Mojang Synergies AB — Minecraft, Versionen, Assets, server.jar,
+  Bedrock Dedicated Server
+- Eclipse Adoptium — Temurin Java-Laufzeiten
+- Fabric MC — Fabric Loader und Loader-Ökosystem
+- Modrinth — Mod-/Plugin-/Resource-Pack-Index und API
+- Wine / D3DMetal — Ausführung der Windows-Version von Minecraft
+  Bedrock und des Bedrock Dedicated Server unter macOS
+
+================================================================
+RECHTLICHES & GEWÄHRLEISTUNG
+================================================================
+
+Die Software wird "wie besehen" (as is) ohne Gewährleistung jeglicher
+Art bereitgestellt — einschließlich, aber nicht beschränkt auf
+Marktfähigkeit, Eignung für einen bestimmten Zweck und
+Nichtexistenz von Rechtsmängeln. In keinem Fall haften die Autorinnen
+und Autoren für Schäden, Datenverlust oder Folgeschäden, die aus der
+Nutzung von NeoCraft, seinen Beta-Features oder den installierten
+Drittanbieter-Inhalten entstehen.
 EOF
 
 cat > "$DIST_XML" <<EOF

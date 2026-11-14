@@ -3,7 +3,7 @@
 <img src="https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge&logo=apple" alt="macOS 14+">
 <img src="https://img.shields.io/badge/Apple_Silicon-arm64-4ADE80?style=for-the-badge&logo=apple" alt="Apple Silicon">
 <img src="https://img.shields.io/badge/Swift-6-FBBF24?style=for-the-badge&logo=swift" alt="Swift 6">
-<img src="https://img.shields.io/badge/Version-2.1.1-7C3AED?style=for-the-badge" alt="v2.1.1">
+<img src="https://img.shields.io/badge/Version-2.1.2-7C3AED?style=for-the-badge" alt="v2.1.2">
 
 # ⛏️ NeoCraft
 
@@ -57,10 +57,10 @@ die Server-Liste übersichtlich.
 
 ```bash
 # 1. NeoCraft holen
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.1.pkg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.2.pkg
 
 # 2. Installieren (zieht die App nach /Applications)
-open NeoCraft-2.1.1.pkg
+open NeoCraft-2.1.2.pkg
 ```
 
 > **Erster Start:** macOS fragt einmal nach Erlaubnis — **Rechtsklick → Öffnen**.
@@ -73,8 +73,8 @@ Das richtige JDK lädt sich von allein. Fertig.
 <summary>🖼️ Alternativ: DMG (Drag & Drop)</summary>
 
 ```bash
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.1.dmg
-open NeoCraft-2.1.1.dmg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.2.dmg
+open NeoCraft-2.1.2.dmg
 # NeoCraft.app auf den Applications-Ordner ziehen
 ```
 
@@ -179,29 +179,33 @@ Minecraft 1.20.5+ wird direkt in `options.txt` konfiguriert.
 
 ---
 
-## ⚠️ Warnungen & Hinweise
+## ⚠️ Warnungen
 
-- **Inoffizielle Software** — NeoCraft ist ein Community-Launcher, kein offizielles Mojang/Microsoft-Produkt. Nutzung auf eigene Gefahr.
-- **Keine Gewähr** — „as is" ohne Garantie. Details im Lizenz-Screen des Installers.
-- **Account nötig** — ein legitimer Minecraft: Java Edition-Account (Microsoft-Login) ist erforderlich.
-- **Ad-hoc signiert** — nicht notarisiert; Gatekeeper fragt beim ersten Start (Rechtsklick → Öffnen oder `xattr -cr`).
-- **Drittanbieter-Downloads** — JDKs, Libraries, Mods und Assets werden zur Laufzeit von Mojang, Adoptium, Fabric und Modrinth geladen — jeweils unter deren Lizenzen.
+- **Beta-Features** — experimentell; vor dem Aktivieren fragt die App nach einer Bestätigung. Kann instabil sein, Spielstände beschädigen oder sich ohne Vorankündigung ändern.
+- **Inoffizielle Software** — Community-Launcher, kein offizielles Mojang/Microsoft-Produkt.
+- **Keine Gewähr** — „as is" ohne Garantie. Details in Lizenz & Rechtlichem.
+- **Account nötig** — ein legitimer Minecraft-Account (Microsoft-Login) ist erforderlich.
+- **Server-Hosting** — für privaten, nicht-kommerziellen Gebrauch; öffentliche/monetarisierte Server können zusätzliche Lizenzen erfordern.
+- **Drittanbieter-Inhalte** — zur Laufzeit geladene JDKs, Mods, Packs und Server-Software unterliegen den Lizenzen von Mojang, Adoptium, Fabric, Modrinth u. a.
 - **Bedrock (Beta)** — benötigt macOS 27 und einen Microsoft-Account mit Minecraft für Windows.
 
-## 📜 Rechtliches
+## 📜 Rechtliches & Credits
 
 Minecraft ist eine Marke von Mojang Synergies AB. NeoCraft steht in
 keiner Verbindung zu Mojang, Microsoft, Fabric oder Modrinth.
-Vollständige Hinweise: [`RELEASE_NOTES.md`](RELEASE_NOTES.md) und der
-Lizenz-Screen im Installer.
-
-## 🙏 Credits
 
 - **NeoCraft** — Design, Code & Packaging vom NeoCraft-Projekt
-- **Swift / SwiftUI** — Apple
+- **Swift / SwiftUI** — Apple Inc.
 - **Fonts** — PressStart2P by CodeMan38 · Silkscreen by Jason Kottke
 - **dmgbuild** — dmgbuild contributors (DMG-Packaging)
-- **Minecraft, Fabric, Modrinth** — und alle In-Game-Inhalte gehören ihren jeweiligen Eigentümern
+- **Mojang Synergies AB** — Minecraft, Assets, server.jar, BDS
+- **Eclipse Adoptium** — Temurin Java-Laufzeiten
+- **Fabric MC** — Loader & Loader-Ökosystem
+- **Modrinth** — Mod-/Plugin-/Pack-Index & API
+- **Wine / D3DMetal** — führt Minecraft Bedrock & BDS unter macOS aus
+
+Vollständige Lizenz-, Credit- und Haftungshinweise: im Lizenz-Screen
+des Installers und in [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ---
 

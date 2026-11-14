@@ -1,15 +1,21 @@
-# NeoCraft 2.1.1
+# NeoCraft 2.1.2
 
 Native Minecraft launcher for macOS — Java **and** Bedrock Edition, Swift 6 + SwiftUI, tuned for Apple silicon and 8 GB Macs.
 
 ## Install
 
-- **`NeoCraft-2.1.1.pkg`** — guided installer, places the app in `/Applications` (recommended)
-- **`NeoCraft-2.1.1.dmg`** — classic drag-to-Applications disk image
+- **`NeoCraft-2.1.2.pkg`** — guided installer, places the app in `/Applications` (recommended)
+- **`NeoCraft-2.1.2.dmg`** — classic drag-to-Applications disk image
 
 > NeoCraft is ad-hoc signed and not notarized yet. On first launch, right-click the app → **Open** (or run `xattr -cr /Applications/NeoCraft.app`).
 
 Requires macOS 14+ on Apple silicon. A Microsoft account that owns Minecraft is needed to play.
+
+## What's new in 2.1.2 — Beta Warnings & Legal
+
+- **Beta activation warnings** — every Beta Features toggle now asks for confirmation before enabling, with a warning that the feature is experimental and may be unstable or change without notice.
+- **Reworked installer license** — the pkg license screen now covers warnings (beta features, unofficial software, server hosting, third-party content), the source-code license, full credits (NeoCraft, Apple/SwiftUI, fonts, dmgbuild, Mojang, Adoptium, Fabric, Modrinth, Wine/D3DMetal) and legal/disclaimer terms.
+- **Updated credits & legal sections** in the release notes and README.
 
 ## What's new in 2.1.1 — Bedrock Integration, Server Management & Liquid Glass
 
@@ -62,15 +68,24 @@ Requires macOS 14+ on Apple silicon. A Microsoft account that owns Minecraft is 
 - macOS may ask once whether NeoCraft may accept incoming network connections — required for LAN friends to join
 - NeoCraft is an independent project, not affiliated with Mojang, Microsoft, Fabric or Modrinth
 
+## Warnings
+
+- **Beta features are experimental** — enabling any beta toggle in Settings asks for confirmation first; beta features may be unstable, break saves, or change without notice.
+- **Unofficial software** — community launcher, not affiliated with Mojang, Microsoft, Fabric or Modrinth. Minecraft is a trademark of Mojang Synergies AB.
+- **No warranty** — provided "as is" without warranty of any kind; see the installer license for full terms.
+- **Account required** — a legitimate Minecraft account (Microsoft sign-in) is required.
+- **Hosted servers** — intended for personal, non-commercial use; public/monetized servers may need additional licenses or comply with Mojang's EULA.
+- **Third-party content** — runtimes, mods, packs and server software downloaded at runtime belong to Mojang, Adoptium, Fabric, Modrinth and others under their own licenses.
+
 ## Credits
 
-- NeoCraft — design, code and packaging by the NeoCraft project
-- Fonts — PressStart2P by CodeMan38, Silkscreen by Jason Kottke (free for any use)
-- dmgbuild — dmgbuild/dmgbuild contributors (DMG packaging)
-- Minecraft, Fabric, Modrinth and all in-game content belong to their respective owners
-
-## Warnings & notices
-
-- **Unofficial software** — community launcher, not affiliated with Mojang or Microsoft. Use at your own risk.
-- **No warranty** — provided "as is"; see the in-installer license for full terms.
-- **Account required** — you must own Minecraft: Java Edition and sign in with a Microsoft account.
+- **NeoCraft** — design, code and packaging by the NeoCraft project
+- **Swift / SwiftUI** — Apple Inc.
+- **Fonts** — PressStart2P by CodeMan38, Silkscreen by Jason Kottke (free for any use)
+- **dmgbuild** — dmgbuild/dmgbuild contributors (DMG packaging)
+- **Mojang Synergies AB** — Minecraft, versions, assets, server.jar, Bedrock Dedicated Server
+- **Eclipse Adoptium** — Temurin Java runtimes
+- **Fabric MC** — Fabric Loader and loader ecosystem
+- **Modrinth** — mod/plugin/resource-pack index and API
+- **Wine / D3DMetal** — runs the Windows version of Minecraft Bedrock and BDS on macOS
+- **Minecraft, Fabric, Modrinth and all in-game content** belong to their respective owners

@@ -3,6 +3,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var pendingBetaTitle: String?
+    @State private var pendingBetaEnable: (() -> Void)?
 
     var body: some View {
         ScrollView {
@@ -36,6 +38,25 @@ struct SettingsView: View {
         .scrollIndicators(.hidden)
         .onAppear {
             model.refreshStorageUsage()
+        }
+        .alert(
+            "Enable beta feature?",
+            isPresented: Binding(
+                get: { pendingBetaTitle != nil },
+                set: { if !$0 { pendingBetaTitle = nil; pendingBetaEnable = nil } }
+            )
+        ) {
+            Button("Enable") {
+                pendingBetaEnable?()
+                pendingBetaEnable = nil
+                pendingBetaTitle = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingBetaEnable = nil
+                pendingBetaTitle = nil
+            }
+        } message: {
+            Text("“\(pendingBetaTitle ?? "")” is experimental and may be unstable, break saves, or change without notice. Continue?")
         }
     }
 
@@ -544,7 +565,17 @@ struct SettingsView: View {
     }
 
     private func betaToggle(title: String, detail: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
+        Toggle(isOn: Binding(
+            get: { isOn.wrappedValue },
+            set: { newValue in
+                if newValue {
+                    pendingBetaTitle = title
+                    pendingBetaEnable = { isOn.wrappedValue = true }
+                } else {
+                    isOn.wrappedValue = false
+                }
+            }
+        )) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
