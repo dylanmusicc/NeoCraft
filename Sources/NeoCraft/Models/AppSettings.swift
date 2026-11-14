@@ -4,6 +4,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case play
     case instances
     case servers
+    case joinServer
     case dashboard
     case studio
     case mods
@@ -20,6 +21,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .play: "play.circle.fill"
         case .instances: "square.stack.3d.up.fill"
         case .servers: "server.rack"
+        case .joinServer: "globe"
         case .dashboard: "gauge.with.dots.needle.33percent"
         case .studio: "paintbrush.pointed.fill"
         case .mods: "shippingbox.fill"
@@ -148,7 +150,7 @@ struct NeoCraftUITheme: Codable, Equatable, Sendable {
     /// just accent tints.
     var fullRedesign = false
     /// Accent hex without '#'.
-    var accentHex = NeoAccent.appleBlue.rawValue
+    var accentHex = NeoAccent.prismarine.rawValue
     /// When true the in-game accent mirrors the launcher's Studio accent
     /// (`settings.accentHex`) so both UIs always match.
     var followLauncherAccent = true
@@ -169,7 +171,7 @@ struct NeoCraftUITheme: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         fullRedesign = try container.decodeIfPresent(Bool.self, forKey: .fullRedesign) ?? false
-        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? NeoAccent.appleBlue.rawValue
+        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? NeoAccent.prismarine.rawValue
         followLauncherAccent = try container.decodeIfPresent(Bool.self, forKey: .followLauncherAccent) ?? true
         tintHex = try container.decodeIfPresent(String.self, forKey: .tintHex) ?? ""
         tintOpacity = try container.decodeIfPresent(Double.self, forKey: .tintOpacity) ?? 0.14
@@ -200,7 +202,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     // MARK: Neo Studio customization
 
     /// Selected accent hex (without '#'). Mirrored into `StudioTheme`.
-    var accentHex = NeoAccent.appleBlue.rawValue
+    var accentHex = NeoAccent.prismarine.rawValue
     /// Secondary glow hex used for ambient background blooms.
     var secondaryGlowHex = NeoAccent.amethystPurple.rawValue
     /// Optional card surface tint hex ("" = neutral material).
@@ -267,7 +269,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         backupToiCloud = try container.decodeIfPresent(Bool.self, forKey: .backupToiCloud) ?? false
         guiScale = try container.decodeIfPresent(Int.self, forKey: .guiScale) ?? 0
         adaptivePerformance = try container.decodeIfPresent(Bool.self, forKey: .adaptivePerformance) ?? false
-        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? NeoAccent.appleBlue.rawValue
+        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? NeoAccent.prismarine.rawValue
         secondaryGlowHex = try container.decodeIfPresent(String.self, forKey: .secondaryGlowHex) ?? NeoAccent.amethystPurple.rawValue
         cardTintHex = try container.decodeIfPresent(String.self, forKey: .cardTintHex) ?? ""
         themeMode = try container.decodeIfPresent(NeoThemeMode.self, forKey: .themeMode) ?? .frosted

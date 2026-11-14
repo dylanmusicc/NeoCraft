@@ -68,6 +68,10 @@ struct ServerDashboardView: View {
     @State private var maxPlayers = ""
     @State private var viewDistance = ""
     @State private var simulationDistance = ""
+    @State private var maxWorldSize = ""
+    @State private var compressionThreshold = ""
+    @State private var commandBlocks = true
+    @State private var hideOnlinePlayers = false
     @State private var difficulty = "easy"
     @State private var gamemode = "survival"
     @State private var propertiesLoaded = false
@@ -313,6 +317,34 @@ struct ServerDashboardView: View {
                 }
                 .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
                 .disabled(!running || model.isGameRunning)
+
+                Menu {
+                    Button {
+                        model.copyServerAddress(server)
+                    } label: {
+                        Label("Copy Address", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        model.reveal(server.directory)
+                    } label: {
+                        Label("Open Server Folder", systemImage: "folder")
+                    }
+                    if running {
+                        Button {
+                            model.restartHostedServer(server)
+                        } label: {
+                            Label("Restart Server", systemImage: "arrow.clockwise")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 30)
+                .help("Quick actions")
             }
         }
     }
@@ -1129,6 +1161,20 @@ struct ServerDashboardView: View {
                         toggleLabel("Allow flight", "Don't kick players for flying.")
                     }
                     .toggleStyle(NeoToggleStyle())
+                    Toggle(isOn: $commandBlocks) {
+                        toggleLabel("Command blocks", "Let command blocks run in worlds.")
+                    }
+                    .toggleStyle(NeoToggleStyle())
+                    Toggle(isOn: $hideOnlinePlayers) {
+                        toggleLabel("Hide player count", "Server list shows no player numbers.")
+                    }
+                    .toggleStyle(NeoToggleStyle())
+                }
+                .disabled(running || settingUp)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    field("Max world size", text: $maxWorldSize)
+                    field("Compression threshold", text: $compressionThreshold)
                 }
                 .disabled(running || settingUp)
 
@@ -1168,6 +1214,8 @@ struct ServerDashboardView: View {
             "pvp": pvp ? "true" : "false",
             "white-list": whiteList ? "true" : "false",
             "allow-flight": allowFlight ? "true" : "false",
+            "enable-command-block": commandBlocks ? "true" : "false",
+            "hide-online-players": hideOnlinePlayers ? "true" : "false",
             "difficulty": difficulty,
             "gamemode": gamemode
         ]
@@ -1178,7 +1226,9 @@ struct ServerDashboardView: View {
             ("max-players", maxPlayers),
             ("view-distance", viewDistance),
             ("simulation-distance", simulationDistance),
-            ("spawn-protection", spawnProtection)
+            ("spawn-protection", spawnProtection),
+            ("max-world-size", maxWorldSize),
+            ("network-compression-threshold", compressionThreshold)
         ] {
             let trimmed = text.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty, Int(trimmed) != nil {
@@ -1200,6 +1250,10 @@ struct ServerDashboardView: View {
         maxPlayers = props["max-players"] ?? ""
         viewDistance = props["view-distance"] ?? ""
         simulationDistance = props["simulation-distance"] ?? ""
+        maxWorldSize = props["max-world-size"] ?? ""
+        compressionThreshold = props["network-compression-threshold"] ?? ""
+        commandBlocks = props["enable-command-block"] != "false"
+        hideOnlinePlayers = props["hide-online-players"] == "true"
         difficulty = props["difficulty"] ?? "easy"
         gamemode = props["gamemode"] ?? "survival"
         propertiesLoaded = true

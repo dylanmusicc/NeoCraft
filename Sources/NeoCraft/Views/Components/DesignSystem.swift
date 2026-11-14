@@ -1186,14 +1186,23 @@ struct EmptyStateView: View {
     var message: String
     var actionTitle: String?
     var action: (() -> Void)?
+    var tint: Color = NeoPalette.accent
+    @State private var floating = false
 
     var body: some View {
         VStack(spacing: 13) {
             Image(systemName: symbol)
                 .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(NeoPalette.accent)
+                .foregroundStyle(tint)
                 .frame(width: 66, height: 66)
-                .background(NeoPalette.accent.opacity(0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(tint.opacity(0.20), lineWidth: 0.8)
+                }
+                .offset(y: floating ? -3.5 : 3.5)
+                .animation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true), value: floating)
+                .onAppear { floating = true }
             VStack(spacing: 5) {
                 Text(title)
                     .font(.neoPixelBold(17))
@@ -1417,6 +1426,199 @@ struct LoadingStateView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 52)
+    }
+}
+
+// MARK: - Live indicators
+
+/// Gentle breathing dot used for "live" states (running game/server).
+struct PulseDot: View {
+    var color: Color = NeoPalette.mint
+    var size: CGFloat = 8
+    @State private var pulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(pulsing ? 0.9 : 0.35), radius: pulsing ? 7 : 3)
+            .scaleEffect(pulsing ? 1.18 : 0.85)
+            .opacity(pulsing ? 1 : 0.6)
+            .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulsing)
+            .onAppear { pulsing = true }
+    }
+}
+
+/// "LIVE" chip with a pulsing dot — shown while a game or server runs.
+struct LiveBadge: View {
+    var label: String = "LIVE"
+    var tint: Color = NeoPalette.mint
+
+    var body: some View {
+        HStack(spacing: 5) {
+            PulseDot(color: tint, size: 6)
+            Text(label)
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .tracking(0.8)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3.5)
+        .background(tint.opacity(0.13), in: Capsule())
+        .overlay {
+            Capsule().strokeBorder(tint.opacity(0.28), lineWidth: 0.7)
+        }
+    }
+}
+
+// MARK: - Tab picker
+
+/// One entry for `NeoTabPicker`.
+struct NeoTabOption<ID: Hashable>: Identifiable {
+    var id: ID
+    var title: String
+    var symbol: String
+    var badge: Int? = nil
+    var badgeTint: Color = NeoPalette.amber
+}
+
+/// Capsule tab strip with a sliding highlight that glides between tabs.
+struct NeoTabPicker<ID: Hashable>: View {
+    var options: [NeoTabOption<ID>]
+    @Binding var selection: ID
+    var tint: Color = NeoPalette.accent
+    @Namespace private var pillNamespace
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(options) { option in
+                let active = selection == option.id
+                Button {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
+                        selection = option.id
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: option.symbol)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(option.title)
+                            .font(.system(size: 11.5, weight: active ? .semibold : .medium, design: .rounded))
+                        if let badge = option.badge, badge > 0 {
+                            Text("\(badge)")
+                                .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(active ? Color.white : option.badgeTint)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    active ? Color.white.opacity(0.25) : option.badgeTint.opacity(0.16),
+                                    in: Capsule()
+                                )
+                        }
+                    }
+                    .foregroundStyle(active ? tint : Color.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background {
+                        if active {
+                            Capsule()
+                                .fill(tint.opacity(0.15))
+                                .overlay {
+                                    Capsule().strokeBorder(tint.opacity(0.30), lineWidth: 0.7)
+                                }
+                                .matchedGeometryEffect(id: "neo-tab-pill", in: pillNamespace)
+                        }
+                    }
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(4)
+        .background(Color.primary.opacity(0.05), in: Capsule())
+        .overlay {
+            Capsule().strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.8)
+        }
+    }
+}
+
+// MARK: - Stat chips
+
+/// Compact icon + label + value capsule used in hero headers.
+struct StatChip: View {
+    var symbol: String
+    var label: String
+    var value: String
+    var tint: Color = NeoPalette.accent
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                Text(label)
+                    .font(.system(size: 8, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(tint.opacity(0.18), lineWidth: 0.7)
+        }
+    }
+}
+
+// MARK: - Skeletons
+
+/// Pulsing placeholder block for loading states.
+struct NeoSkeleton: View {
+    var width: CGFloat? = nil
+    var height: CGFloat = 14
+    var cornerRadius: CGFloat = 7
+    @State private var pulsing = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.06))
+            .frame(width: width, height: height)
+            .opacity(pulsing ? 0.45 : 1)
+            .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulsing)
+            .onAppear { pulsing = true }
+    }
+}
+
+/// A few shimmering rows that mimic a loading list.
+struct NeoSkeletonRows: View {
+    var rows: Int = 3
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(0..<rows, id: \.self) { _ in
+                HStack(spacing: 10) {
+                    NeoSkeleton(width: 30, height: 30, cornerRadius: 8)
+                    VStack(alignment: .leading, spacing: 5) {
+                        NeoSkeleton(width: 140, height: 10)
+                        NeoSkeleton(width: 210, height: 8)
+                    }
+                    Spacer()
+                    NeoSkeleton(width: 34, height: 18, cornerRadius: 9)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 9)
+                .background(Color.primary.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
     }
 }
 

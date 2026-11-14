@@ -293,6 +293,7 @@ struct ModLibraryView: View {
 private struct ModProjectRow: View {
     @Environment(AppModel.self) private var model
     let hit: ModrinthSearchHit
+    @State private var hovering = false
 
     private var installed: Bool { model.installedProjectIDs.contains(hit.projectID) }
     private var installing: Bool { model.installingProjectID == hit.projectID }
@@ -355,8 +356,15 @@ private struct ModProjectRow: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.8)
+                .strokeBorder(
+                    hovering ? NeoPalette.accent.opacity(0.35) : Color.primary.opacity(0.07),
+                    lineWidth: hovering ? 1 : 0.8
+                )
         }
+        .shadow(color: hovering ? NeoPalette.accent.opacity(0.12) : Color.clear, radius: 10, y: 3)
+        .scaleEffect(hovering ? 1.004 : 1)
+        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
+        .onHover { hovering = $0 }
         .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         .onTapGesture {
             model.openProject(hit)

@@ -745,6 +745,22 @@ struct SettingsView: View {
 
             HStack(spacing: 8) {
                 Button {
+                    model.checkForAppUpdate(manual: true)
+                } label: {
+                    Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                .disabled(model.appUpdatePhase == .checking)
+
+                appUpdateStatus
+
+                Spacer()
+            }
+
+            NeoDivider()
+
+            HStack(spacing: 8) {
+                Button {
                     model.checkForUpdates()
                 } label: {
                     Label("Check Mod Updates", systemImage: "arrow.triangle.2.circlepath")
@@ -796,6 +812,38 @@ struct SettingsView: View {
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
+        }
+    }
+
+    /// Live status + action for the GitHub self-update next to the button.
+    @ViewBuilder
+    private var appUpdateStatus: some View {
+        switch model.appUpdatePhase {
+        case .idle, .upToDate:
+            EmptyView()
+        case .checking:
+            ProgressView().controlSize(.small)
+            Text("Checking GitHub…")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+        case .available(let release):
+            NeoPill(text: "\(release.version) available", symbol: "sparkles", tint: NeoPalette.mint)
+            Button("Download & Install") { model.downloadAppUpdate() }
+                .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+        case .downloading(_, let fraction):
+            ProgressView(value: fraction).frame(width: 80)
+            Text("\(Int(fraction * 100))%")
+                .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.secondary)
+        case .readyToInstall:
+            NeoPill(text: "Installed", symbol: "checkmark.circle.fill", tint: NeoPalette.mint)
+            Button("Restart") { model.restartForUpdate() }
+                .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+        case .failed(let message):
+            Text(message)
+                .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                .foregroundStyle(NeoPalette.danger)
+                .lineLimit(1)
         }
     }
 

@@ -5,6 +5,8 @@
   "nav.instances.subtitle": "Mondes, versions et mods isolés",
   "nav.servers.title": "Serveurs",
   "nav.servers.subtitle": "Listes de serveurs multijoueur et joins rapides",
+  "nav.joinServer.title": "Rejoindre un serveur",
+  "nav.joinServer.subtitle": "Serveurs publics et connexion directe.",
   "nav.studio.title": "Studio",
   "nav.studio.subtitle": "Thèmes, fond d'écran, tableau de bord et audio",
   "nav.mods.title": "Bibliothèque de mods",

@@ -5,6 +5,8 @@
   "nav.instances.subtitle": "Isolierte Welten, Versionen und Mods",
   "nav.servers.title": "Server",
   "nav.servers.subtitle": "Multiplayer-Serverlisten und Schnellbeitritt",
+  "nav.joinServer.title": "Server beitreten",
+  "nav.joinServer.subtitle": "Öffentliche Server und Direktverbindung.",
   "nav.dashboard.title": "Dashboard",
   "nav.dashboard.subtitle": "Gehostete Welten als eigene Server",
   "nav.studio.title": "Studio",

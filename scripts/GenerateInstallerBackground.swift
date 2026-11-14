@@ -121,8 +121,8 @@ let titleAttrs: [NSAttributedString.Key: Any] = [
 "NeoCraft".draw(at: NSPoint(x: 330, y: H - 130), withAttributes: titleAttrs)
 
 let subtitle = version.isEmpty
-    ? "Native Minecraft Launcher"
-    : "Version \(version) · Native Minecraft Launcher"
+    ? "Voxel Edition"
+    : "Version \(version) · Voxel Edition"
 let subAttrs: [NSAttributedString.Key: Any] = [
     .font: NSFont(name: "HelveticaNeue-Medium", size: 19) ?? NSFont.systemFont(ofSize: 19),
     .foregroundColor: rgb(0.75, 0.95, 0.55)

@@ -347,7 +347,10 @@ struct ServersView: View {
         if settingUp {
             NeoBadge(text: "Setting up", color: NeoPalette.amber)
         } else if running {
-            NeoBadge(text: ready ? "Online" : "Starting", color: ready ? NeoPalette.mint : NeoPalette.sky)
+            HStack(spacing: 4) {
+                if ready { PulseDot(color: NeoPalette.mint, size: 6) }
+                NeoBadge(text: ready ? "Online" : "Starting", color: ready ? NeoPalette.mint : NeoPalette.sky)
+            }
         } else {
             NeoBadge(text: "Stopped", color: Color.secondary)
         }

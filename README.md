@@ -3,13 +3,13 @@
 <img src="https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge&logo=apple" alt="macOS 14+">
 <img src="https://img.shields.io/badge/Apple_Silicon-arm64-4ADE80?style=for-the-badge&logo=apple" alt="Apple Silicon">
 <img src="https://img.shields.io/badge/Swift-6-FBBF24?style=for-the-badge&logo=swift" alt="Swift 6">
-<img src="https://img.shields.io/badge/Version-2.1.3-7C3AED?style=for-the-badge" alt="v2.1.3">
+<img src="https://img.shields.io/badge/Version-2.3.0-2DD4BF?style=for-the-badge" alt="v2.3.0">
 
 # ⛏️ NeoCraft
 
 ### *Der native Minecraft-Launcher, den dein Mac verdient hat.*
 
-**Minecraft: Java Edition — paved with Swift, fueled by magic.**
+**Voxel Edition — Minecraft, paved with Swift, fueled by magic.**
 
 Ein Launch-Pad in Swift 6 + SwiftUI, gebaut für Apple Silicon und leise 8-GB-Macs.
 Microsoft-Anmeldung, Mojang-Versionen, Fabric, Java-Installation, Modrinth —
@@ -57,10 +57,10 @@ die Server-Liste übersichtlich.
 
 ```bash
 # 1. NeoCraft holen
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.3.pkg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.3.0.pkg
 
 # 2. Installieren (zieht die App nach /Applications)
-open NeoCraft-2.1.3.pkg
+open NeoCraft-2.3.0.pkg
 ```
 
 > **Erster Start:** macOS fragt einmal nach Erlaubnis — **Rechtsklick → Öffnen**.
@@ -73,8 +73,8 @@ Das richtige JDK lädt sich von allein. Fertig.
 <summary>🖼️ Alternativ: DMG (Drag & Drop)</summary>
 
 ```bash
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.3.dmg
-open NeoCraft-2.1.3.dmg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.3.0.dmg
+open NeoCraft-2.3.0.dmg
 # NeoCraft.app auf den Applications-Ordner ziehen
 ```
 

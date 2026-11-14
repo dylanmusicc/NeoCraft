@@ -102,6 +102,7 @@ struct SnapshotRenderView: View {
         case .play: PlayView()
         case .instances: InstancesView()
         case .servers, .dashboard: ServersView()
+        case .joinServer: JoinServerView()
         case .studio: StudioView()
         case .mods: ModLibraryView()
         case .screenshots: ScreenshotsView()

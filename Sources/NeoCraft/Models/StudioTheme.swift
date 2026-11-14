@@ -131,6 +131,7 @@ enum NeoRadiusPreset: String, Codable, CaseIterable, Identifiable, Hashable, Sen
 
 /// Curated Apple-inspired accent swatches for the launcher.
 enum NeoAccent: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case prismarine = "2DD4BF"
     case appleBlue = "5B8CFF"
     case emeraldCreeper = "4ADE80"
     case amethystPurple = "A78BFA"
@@ -141,6 +142,7 @@ enum NeoAccent: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     var name: String {
         switch self {
+        case .prismarine: "Prismarine Teal"
         case .appleBlue: "Apple Blue"
         case .emeraldCreeper: "Emerald Creeper"
         case .amethystPurple: "Amethyst Purple"
@@ -419,7 +421,7 @@ enum StudioTheme {
     static var accentHex: String {
         guard let defaults = UserDefaults.standard.object(forKey: accentKey) as? String,
               !defaults.isEmpty else {
-            return NeoAccent.appleBlue.rawValue
+            return NeoAccent.prismarine.rawValue
         }
         return defaults
     }

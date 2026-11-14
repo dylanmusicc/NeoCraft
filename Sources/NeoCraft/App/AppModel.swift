@@ -183,6 +183,20 @@ final class AppModel {
     var modUpdates: [ModUpdate] = []
     var isCheckingUpdates = false
 
+    // MARK: - App updates (GitHub Releases)
+
+    var appUpdatePhase: AppUpdatePhase = .idle
+    var latestAppRelease: AppRelease?
+    /// Banner dismissed for this version — it stays hidden until a newer one lands.
+    var dismissedUpdateVersion: String?
+
+    var showsUpdateBanner: Bool {
+        if case .available(let release) = appUpdatePhase {
+            return dismissedUpdateVersion != release.version
+        }
+        return false
+    }
+
     var modUpdateByProjectID: [String: ModUpdate] {
         Dictionary(uniqueKeysWithValues: modUpdates.map { ($0.projectID, $0) })
     }
@@ -382,6 +396,10 @@ final class AppModel {
         StudioTheme.refreshBiomeAccent()
         refreshBedrockContent()
         isBootstrapping = false
+        // A newer NeoCraft on GitHub installs itself; checked once a day.
+        if AppUpdater.isDueForAutomaticCheck {
+            checkForAppUpdate()
+        }
         // Servers flagged "Start with NeoCraft" boot after the UI is up.
         // Bedrock servers wait for their own beta flag.
         for server in hostedServers where server.autoStart {
@@ -3059,6 +3077,69 @@ final class AppModel {
         }
     }
 
+    // MARK: - App updates (GitHub Releases)
+
+    /// Checks GitHub for a newer NeoCraft. `manual` bypasses the daily throttle
+    /// and surfaces failures as a toast instead of staying silent.
+    func checkForAppUpdate(manual: Bool = false) {
+        guard appUpdatePhase != .checking,
+              appUpdatePhase != .downloading(version: "", fraction: 0) else { return }
+        if !manual, !AppUpdater.isDueForAutomaticCheck { return }
+        appUpdatePhase = .checking
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                if let release = try await AppUpdater.latestRelease() {
+                    self.latestAppRelease = release
+                    self.appUpdatePhase = .available(release)
+                    self.appendConsole("NeoCraft \(release.version) is available on GitHub", level: .info)
+                } else {
+                    self.appUpdatePhase = .upToDate
+                }
+            } catch {
+                self.appUpdatePhase = .failed(error.localizedDescription)
+                if manual {
+                    self.showToast("Couldn't check for updates")
+                }
+            }
+            AppUpdater.markChecked()
+        }
+    }
+
+    /// Downloads the pending release's DMG, then swaps the app bundle.
+    func downloadAppUpdate() {
+        guard case .available(let release) = appUpdatePhase else { return }
+        appUpdatePhase = .downloading(version: release.version, fraction: 0)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await AppUpdater.download(release) { [weak self] fraction in
+                    Task { @MainActor in
+                        self?.appUpdatePhase = .downloading(version: release.version, fraction: fraction)
+                    }
+                }
+                try await AppUpdater.install(from: AppPaths.cache
+                    .appendingPathComponent("NeoCraft-\(release.version).dmg"))
+                self.appUpdatePhase = .readyToInstall
+                self.showToast("NeoCraft \(release.version) installed — restart to finish")
+            } catch {
+                self.appUpdatePhase = .failed(error.localizedDescription)
+                self.presentError("Update failed", error)
+            }
+        }
+    }
+
+    /// Restarts into the freshly installed bundle.
+    func restartForUpdate() {
+        AppUpdater.relaunch()
+    }
+
+    func dismissUpdateBanner() {
+        if case .available(let release) = appUpdatePhase {
+            dismissedUpdateVersion = release.version
+        }
+    }
+
     func updateProject(_ update: ModUpdate) {
         install(
             projectID: update.projectID,
@@ -3441,8 +3522,8 @@ final class AppModel {
     }
 
     /// Everything a Fabric instance needs at runtime beyond the game
-    /// files themselves: a compatible `fabric-api` from Modrinth (skipped
-    /// when current) and — only while the beta feature is on — the
+    /// files themselves: a compatible `fabric-api` from Modrinth, the
+    /// `controlify` controller-support mod and — only while the beta feature is on — the
     /// `neocraft-ui`/`neocraft-hud`/`neocraft-host` jars plus the synced
     /// `neocraft_ui.json`/`neocraft_hud.json` configs. Called on instance
     /// save and before every launch — all steps are idempotent and cheap
@@ -3456,6 +3537,7 @@ final class AppModel {
             UIConfigWriter.writeQuietly(settings.uiTheme, launcher: settings, to: instance)
         }
         await modInstaller.ensureFabricAPI(for: instance)
+        await modInstaller.ensureControllerSupport(for: instance)
     }
 
     /// Removes the beta companion mods (`neocraft-ui`, `neocraft-hud`,

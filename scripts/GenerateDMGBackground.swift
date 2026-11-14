@@ -126,8 +126,8 @@ let subAttrs: [NSAttributedString.Key: Any] = [
     .foregroundColor: rgb(0.75, 0.95, 0.55)
 ]
 let subtitle = version.isEmpty
-    ? "Native Minecraft Launcher"
-    : "Version \(version) · Native Minecraft Launcher"
+    ? "Voxel Edition"
+    : "Version \(version) · Voxel Edition"
 "\(subtitle)".draw(at: NSPoint(x: 424, y: H - 195), withAttributes: subAttrs)
 
 // Drag hint arrow (pixel style).

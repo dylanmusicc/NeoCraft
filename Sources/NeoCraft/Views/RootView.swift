@@ -111,6 +111,8 @@ struct RootView: View {
             InstancesView()
         case .servers, .dashboard:
             ServersView()
+        case .joinServer:
+            JoinServerView()
         case .studio:
             StudioView()
         case .mods:
@@ -327,7 +329,7 @@ struct SidebarView: View {
                         .font(.neoPixelBold(19))
                         .tracking(0.4)
                         .foregroundStyle(.primary)
-                    Text("MINECRAFT LAUNCHER")
+                    Text("VOXEL EDITION")
                         .font(.system(size: 7.5, weight: .bold, design: .rounded))
                         .tracking(1.35)
                         .foregroundStyle(.secondary)
@@ -463,7 +465,11 @@ struct SidebarView: View {
             model.openServerDashboard(server)
         } label: {
             HStack(spacing: 8) {
-                StatusDot(color: color, size: 6)
+                if ready {
+                    PulseDot(color: color, size: 6)
+                } else {
+                    StatusDot(color: color, size: 6)
+                }
                 Text(server.name)
                     .font(.system(size: 11, weight: selected ? .semibold : .medium, design: .rounded))
                     .lineLimit(1)

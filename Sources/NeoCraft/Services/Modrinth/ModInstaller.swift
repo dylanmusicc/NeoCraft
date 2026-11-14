@@ -150,6 +150,25 @@ actor ModInstaller {
         }
     }
 
+    /// Ensures a controller-support mod is present on every Fabric instance.
+    /// Minecraft Java has no native gamepad support; Controlify translates
+    /// HID gamepads into keyboard/mouse-style input in-game. Safe to call on
+    /// every launch — already-installed projects short-circuit.
+    func ensureControllerSupport(for instance: GameInstance) async {
+        guard instance.loader == .fabric else { return }
+        do {
+            let project = try await modrinth.project(idOrSlug: "controlify")
+            _ = try await installTargets(
+                [Target(projectID: project.id, versionID: nil, fallbackTitle: project.title)],
+                into: instance,
+                expectedCount: 1,
+                progress: { _ in }
+            )
+        } catch {
+            // Controller support is a nicety; never block a launch over it.
+        }
+    }
+
     /// Ensures the macOS input-fix mod is present for instances that opted in.
     /// Safe to call on every launch — already-installed projects short-circuit.
     func ensureInputFix(for instance: GameInstance) async {

@@ -5,6 +5,8 @@
   "nav.instances.subtitle": "Mundos, versiones y mods aislados",
   "nav.servers.title": "Servidores",
   "nav.servers.subtitle": "Listas de servidores y uniones rápidas",
+  "nav.joinServer.title": "Unirse a un servidor",
+  "nav.joinServer.subtitle": "Servidores públicos y conexión directa.",
   "nav.studio.title": "Studio",
   "nav.studio.subtitle": "Temas, fondo, panel y audio del launcher",
   "nav.mods.title": "Biblioteca de mods",

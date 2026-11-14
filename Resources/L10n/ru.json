@@ -5,6 +5,8 @@
   "nav.instances.subtitle": "Изолированные миры, версии и моды",
   "nav.servers.title": "Серверы",
   "nav.servers.subtitle": "Списки мультиплеерных серверов и быстрый вход",
+  "nav.joinServer.title": "Подключиться к серверу",
+  "nav.joinServer.subtitle": "Публичные серверы и прямое подключение.",
   "nav.studio.title": "Студия",
   "nav.studio.subtitle": "Темы, обои, панель и звук лаунчера",
   "nav.mods.title": "Библиотека модов",

@@ -1,3 +1,25 @@
+# NeoCraft 2.3.0 — Voxel Edition
+
+Native Minecraft launcher for macOS — Java **and** Bedrock Edition, Swift 6 + SwiftUI, tuned for Apple silicon and 8 GB Macs.
+
+## Install
+
+- **`NeoCraft-2.3.0.pkg`** — guided installer, places the app in `/Applications` (recommended)
+- **`NeoCraft-2.3.0.dmg`** — classic drag-to-Applications disk image
+
+> NeoCraft is ad-hoc signed and not notarized yet. On first launch, right-click the app → **Open** (or run `xattr -cr /Applications/NeoCraft.app`).
+
+Requires macOS 14+ on Apple silicon. A Microsoft account that owns Minecraft is needed to play.
+
+## What's new in 2.3.0 — Voxel Edition rebrand & UI overhaul
+
+- **New brand identity** — the app icon is now a pixel-art grass block on a deep "bedrock" tile, the default accent is Prismarine Teal, and the launcher calls itself the **Voxel Edition**.
+- **Instance Detail, reimagined** — a gradient hero card with live stats (mods, worlds, storage, RAM), a pulsing LIVE badge while the game runs, one-tap Play/Stop, sliding tab pills with count badges, animated tab transitions, mod-update banner, skeleton loading and one-tap config presets (Performance / Balanced / Quality).
+- **Alive everywhere** — instance cards stagger in and glow on hover, world and mod rows lift on hover, empty states float gently, and running servers pulse in the sidebar.
+- Everything else — Bedrock integration, server hosting, Mod Library, Neo Studio — unchanged and ready to play.
+
+---
+
 # NeoCraft 2.1.3
 
 Native Minecraft launcher for macOS — Java **and** Bedrock Edition, Swift 6 + SwiftUI, tuned for Apple silicon and 8 GB Macs.

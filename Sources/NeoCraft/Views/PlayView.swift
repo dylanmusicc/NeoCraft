@@ -40,6 +40,10 @@ struct PlayView: View {
                     }
                 }
 
+                if model.showsUpdateBanner, case .available(let release) = model.appUpdatePhase {
+                    updateBanner(release)
+                }
+
                 if let instance = model.selectedInstance {
                     hero(instance)
                 } else {
@@ -131,6 +135,76 @@ struct PlayView: View {
         }
     }
 
+    /// "NeoCraft X.Y.Z is out" banner — downloads and installs the update
+    /// straight from the GitHub release.
+    private func updateBanner(_ release: AppRelease) -> some View {
+        NeoCard {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        LinearGradient(
+                            colors: [NeoPalette.accent, NeoPalette.violet],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("NeoCraft \(release.version) is out")
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    Text("Download and install — takes a few seconds, then restart.")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if case .downloading(_, let fraction) = model.appUpdatePhase {
+                    ProgressView(value: fraction)
+                        .frame(width: 90)
+                    Text("\(Int(fraction * 100))%")
+                        .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, alignment: .trailing)
+                } else {
+                    Button {
+                        model.downloadAppUpdate()
+                    } label: {
+                        Label("Update", systemImage: "arrow.down.circle")
+                    }
+                    .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+                }
+
+                if case .readyToInstall = model.appUpdatePhase {
+                    Button("Restart") { model.restartForUpdate() }
+                        .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+                }
+
+                if let notes = release.htmlURL {
+                    Link(destination: notes) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .help("Release notes")
+                }
+
+                Button {
+                    model.dismissUpdateBanner()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remind me later")
+            }
+        }
+    }
+
     /// Dashboard card listing hosted servers — start/stop inline and a
     /// jump into the Servers tab dashboard.
     private var hostedServersCard: some View {
@@ -217,11 +291,21 @@ struct PlayView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 7) {
-                        NeoPill(
-                            text: running ? "Running" : (preparing ? "Preparing" : "Ready to play"),
-                            symbol: running ? "waveform" : (preparing ? "arrow.triangle.2.circlepath" : "sparkles"),
-                            tint: pillTint
-                        )
+                        if running {
+                            LiveBadge()
+                        } else if preparing {
+                            NeoPill(
+                                text: "Preparing",
+                                symbol: "arrow.triangle.2.circlepath",
+                                tint: pillTint
+                            )
+                        } else {
+                            NeoPill(
+                                text: "Ready to play",
+                                symbol: "sparkles",
+                                tint: pillTint
+                            )
+                        }
                         NeoPill(text: instance.versionLabel, symbol: instance.edition == .bedrock ? "gamecontroller.fill" : instance.loader.symbol, tint: pillTint)
                         if model.isBoostInstalled(instance) {
                             NeoPill(text: "Neo Boost", symbol: "bolt.fill", tint: pillTint)
@@ -371,11 +455,15 @@ struct PlayView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 7) {
-                    NeoPill(
-                        text: running ? "Running" : (preparing ? "Preparing" : "Ready"),
-                        symbol: running ? "waveform" : (preparing ? "arrow.triangle.2.circlepath" : "sparkles"),
-                        tint: running ? NeoPalette.mint : NeoPalette.accent
-                    )
+                    if running {
+                        LiveBadge()
+                    } else {
+                        NeoPill(
+                            text: preparing ? "Preparing" : "Ready",
+                            symbol: preparing ? "arrow.triangle.2.circlepath" : "sparkles",
+                            tint: NeoPalette.accent
+                        )
+                    }
                     NeoPill(text: instance.versionLabel, symbol: instance.edition == .bedrock ? "gamecontroller.fill" : instance.loader.symbol, tint: NeoPalette.sky)
                     if model.isBoostInstalled(instance) {
                         NeoPill(text: "Neo Boost", symbol: "bolt.fill", tint: NeoPalette.amber)

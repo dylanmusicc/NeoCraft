@@ -79,8 +79,8 @@ struct InstancesView: View {
                         columns: [GridItem(.adaptive(minimum: 308, maximum: 460), spacing: 18)],
                         spacing: 18
                     ) {
-                        ForEach(filteredInstances) { instance in
-                            InstanceCard(instance: instance)
+                        ForEach(Array(filteredInstances.enumerated()), id: \.element.id) { index, instance in
+                            InstanceCard(instance: instance, appearIndex: index)
                         }
                     }
 
@@ -120,8 +120,11 @@ struct InstancesView: View {
 private struct InstanceCard: View {
     @Environment(AppModel.self) private var model
     let instance: GameInstance
+    var appearIndex: Int = 0
+    @State private var appeared = false
 
     private var accent: Color { Color(hex: instance.colorHex) }
+    private var hovered: Bool { model.hoveredInstanceID == instance.id }
     private var stats: InstanceStats? { model.statsByInstance[instance.id] }
     private var running: Bool { model.isRunning(instance) }
     private var preparing: Bool { model.isPreparing(instance) }
@@ -243,14 +246,23 @@ private struct InstanceCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(
-                    model.selectedInstanceID == instance.id
-                        ? accent.opacity(0.55)
+                    model.selectedInstanceID == instance.id || hovered
+                        ? accent.opacity(model.selectedInstanceID == instance.id ? 0.55 : 0.30)
                         : Color.clear,
-                    lineWidth: 1.2
+                    lineWidth: model.selectedInstanceID == instance.id ? 1.2 : 0.8
                 )
         }
-        .scaleEffect(model.hoveredInstanceID == instance.id ? 1.006 : 1)
+        .shadow(color: hovered ? accent.opacity(0.18) : Color.clear, radius: 14, y: 4)
+        .scaleEffect(hovered ? 1.008 : 1)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 14)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: appeared)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: model.hoveredInstanceID)
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85).delay(min(Double(appearIndex), 14) * 0.035)) {
+                appeared = true
+            }
+        }
         .onHover { hovering in
             if hovering {
                 model.hoveredInstanceID = instance.id

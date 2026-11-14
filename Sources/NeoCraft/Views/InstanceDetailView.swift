@@ -32,6 +32,11 @@ struct InstanceDetailView: View {
 
     @State private var tab: DetailTab = .mods
 
+    private var accent: Color { Color(hex: instance.colorHex) }
+    private var running: Bool { model.isRunning(instance) }
+    private var preparing: Bool { model.isPreparing(instance) }
+    private var stats: InstanceStats? { model.statsByInstance[instance.id] }
+
     /// Bedrock has no Java mod ecosystem — the Mods tab is hidden entirely.
     private var availableTabs: [DetailTab] {
         DetailTab.allCases.filter { $0 != .mods || instance.edition == .java }
@@ -41,46 +46,185 @@ struct InstanceDetailView: View {
         availableTabs.contains(tab) ? tab : (availableTabs.first ?? .mods)
     }
 
+    private var effectiveTabBinding: Binding<DetailTab> {
+        Binding(get: { effectiveTab }, set: { tab = $0 })
+    }
+
+    private func badgeCount(for tab: DetailTab) -> Int? {
+        switch tab {
+        case .mods:
+            guard let count = stats?.modCount, count > 0 else { return nil }
+            return count
+        case .visuals:
+            let count = (stats?.shaderPackCount ?? 0) + (stats?.resourcePackCount ?? 0)
+            return count > 0 ? count : nil
+        case .worlds:
+            guard let count = stats?.worldCount, count > 0 else { return nil }
+            return count
+        case .config:
+            return nil
+        }
+    }
+
+    private var tabOptions: [NeoTabOption<DetailTab>] {
+        availableTabs.map {
+            NeoTabOption(id: $0, title: $0.title, symbol: $0.symbol, badge: badgeCount(for: $0))
+        }
+    }
+
+    /// Matches the card radius logic in `NeoCardModifier` so the hero's
+    /// gradient never spills past its rounded corners.
+    private var heroRadius: CGFloat {
+        (StudioTheme.cornerStyle == .voxel ? 6 : 20) * StudioTheme.radiusPreset.scale
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                BlockIconTile(block: instance.iconBlock, color: Color(hex: instance.colorHex), symbol: instance.iconSymbol, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(instance.name).font(.neoTitle)
-                    Text(instance.versionLabel)
-                        .font(.neoCaption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
+            hero
 
-            // Tab picker
-            HStack(spacing: 6) {
-                ForEach(availableTabs) { item in
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { tab = item }
-                    } label: {
-                        Label(item.title, systemImage: item.symbol)
-                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(
-                                effectiveTab == item ? NeoPalette.accent.opacity(0.16) : Color.primary.opacity(0.05),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(effectiveTab == item ? NeoPalette.accent : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
+            NeoTabPicker(options: tabOptions, selection: effectiveTabBinding, tint: accent)
 
             Divider()
 
+            tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding(22)
+        .frame(width: 780, height: 610)
+        .onAppear { model.refreshStats(for: instance) }
+    }
+
+    // MARK: Hero
+
+    private var hero: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: heroRadius, style: .continuous)
+                .fill(.regularMaterial)
+            LinearGradient(
+                colors: [accent.opacity(0.24), accent.opacity(0.07), Color.clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            HStack(alignment: .center, spacing: 16) {
+                BlockIconTile(block: instance.iconBlock, color: accent, symbol: instance.iconSymbol, size: 58)
+                    .shadow(color: accent.opacity(0.45), radius: 16, y: 5)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(instance.name)
+                            .font(.neoTitle)
+                            .lineLimit(1)
+                        if running {
+                            LiveBadge()
+                        }
+                        NeoBadge(text: instance.edition.shortTitle, color: accent)
+                    }
+                    Text(instance.versionLabel)
+                        .font(.neoCaption)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 8) {
+                        StatChip(
+                            symbol: instance.edition == .java ? "puzzlepiece.extension" : "shippingbox",
+                            label: instance.edition == .java ? "Mods" : "Packs",
+                            value: "\(instance.edition == .java ? (stats?.modCount ?? 0) : (stats?.resourcePackCount ?? 0) + (stats?.shaderPackCount ?? 0))",
+                            tint: accent
+                        )
+                        StatChip(
+                            symbol: "globe.americas",
+                            label: "Worlds",
+                            value: "\(stats?.worldCount ?? 0)",
+                            tint: NeoPalette.grass
+                        )
+                        StatChip(
+                            symbol: "internaldrive",
+                            label: "Storage",
+                            value: Formatters.bytes(stats?.diskBytes ?? 0),
+                            tint: NeoPalette.sky
+                        )
+                        StatChip(
+                            symbol: "memorychip",
+                            label: "RAM",
+                            value: Formatters.memory(instance.effectiveMemoryMB),
+                            tint: NeoPalette.violet
+                        )
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 7) {
+                    HStack(spacing: 8) {
+                        Button {
+                            model.beginEditInstance(instance)
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                        .help("Edit instance")
+
+                        Button {
+                            if running {
+                                model.stopGame()
+                            } else {
+                                model.startGame(instance)
+                            }
+                        } label: {
+                            if preparing {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .frame(width: 52)
+                            } else {
+                                Label(running ? "Stop" : "Play", systemImage: running ? "stop.fill" : "play.fill")
+                            }
+                        }
+                        .buttonStyle(
+                            NeoButtonStyle(
+                                kind: running ? .danger : .primary,
+                                tint: running ? NeoPalette.danger : accent,
+                                compact: true
+                            )
+                        )
+                        .disabled(preparing)
+
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+                        .help("Close")
+                    }
+
+                    if let lastPlayed = instance.lastPlayed {
+                        Text("Last played \(Formatters.relativeDate(lastPlayed)) · \(Formatters.duration(instance.totalPlayTime)) total")
+                            .font(.neoCaption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Never played")
+                            .font(.neoCaption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(18)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: heroRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: heroRadius, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.25), Color.white.opacity(0.05), Color.black.opacity(0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 8)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        Group {
             switch effectiveTab {
             case .mods: ModsTab(instance: instance)
             case .visuals: VisualsTab(instance: instance)
@@ -88,8 +232,12 @@ struct InstanceDetailView: View {
             case .config: ConfigTab(instance: instance)
             }
         }
-        .padding(22)
-        .frame(width: 720, height: 560)
+        .id(effectiveTab)
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        ))
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: effectiveTab)
     }
 }
 
@@ -196,6 +344,25 @@ private struct ModsTab: View {
                     .controlSize(.small)
             }
 
+            if !updates.isEmpty {
+                HStack(spacing: 9) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(NeoPalette.amber)
+                    Text("\(updates.count) mod update\(updates.count == 1 ? "" : "s") available")
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    Spacer()
+                    Button("Review") { statusFilter = "updates" }
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 11).padding(.vertical, 8)
+                .background(NeoPalette.amber.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(NeoPalette.amber.opacity(0.25), lineWidth: 0.8)
+                }
+            }
+
             if showingProfileCreator {
                 HStack(spacing: 8) {
                     TextField("Profile name", text: $newProfileName)
@@ -233,7 +400,7 @@ private struct ModsTab: View {
             Divider()
 
             if loading {
-                HStack { ProgressView().controlSize(.small); Text("Scanning mods…").font(.neoCaption).foregroundStyle(.secondary) }
+                NeoSkeletonRows(rows: 4)
                 Spacer()
             } else if filtered.isEmpty {
                 Spacer()
@@ -615,7 +782,14 @@ private struct WorldsTab: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 6) {
-                        ForEach(worlds) { world in worldRow(world) }
+                        ForEach(worlds) { world in
+                            WorldRow(
+                                world: world,
+                                instance: instance,
+                                onRadar: { radarWorld = world },
+                                onHost: { hostingWorld = world }
+                            )
+                        }
                     }
                 }
                 .scrollIndicators(.hidden)
@@ -635,42 +809,70 @@ private struct WorldsTab: View {
         Binding(get: { hostingWorld }, set: { hostingWorld = $0 })
     }
 
-    private func worldRow(_ world: WorldInfo) -> some View {
+    private var radarBinding: Binding<WorldInfo?> {
+        Binding(get: { radarWorld }, set: { radarWorld = $0 })
+    }
+
+    private func reload() {
+        worlds = WorldBackupService.worlds(in: instance)
+    }
+}
+
+/// Single world row with a hover lift so the list feels alive.
+private struct WorldRow: View {
+    @Environment(AppModel.self) private var model
+    let world: WorldInfo
+    let instance: GameInstance
+    var onRadar: () -> Void
+    var onHost: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
         HStack(spacing: 10) {
             worldIcon(world)
             VStack(alignment: .leading, spacing: 1) {
                 Text(world.levelName ?? world.name)
                     .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                Text(worldSubtitle(world))
+                Text(worldSubtitle)
                     .font(.neoCaption).foregroundStyle(.secondary)
             }
             Spacer()
             if model.settings.betaFeatures.worldRadar {
-                Button {
-                    radarWorld = world
-                } label: { Image(systemName: "map.fill") }
-                    .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
-                    .help("Seed & biome radar")
+                Button(action: onRadar) {
+                    Image(systemName: "map.fill")
+                }
+                .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+                .help("Seed & biome radar")
             }
-            Button("Play") {
+            Button {
                 model.playWorld(world, in: instance)
+            } label: {
+                Label("Play", systemImage: "play.fill")
             }
             .controlSize(.small)
             .disabled(model.isGameRunning || model.isRunning(instance))
             if instance.edition == .java {
-                Button("Host") {
-                    hostingWorld = world
-                }
-                .controlSize(.small)
-                .disabled(model.isRunning(instance))
-                .help("Host this world as a Java dedicated server")
+                Button("Host", action: onHost)
+                    .controlSize(.small)
+                    .disabled(model.isRunning(instance))
+                    .help("Host this world as a Java dedicated server")
             }
             Button("Back Up") { model.backupWorlds(in: instance, world: world) }
                 .controlSize(.small)
                 .disabled(model.backupRunning)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(
+            hovering ? NeoPalette.accent.opacity(0.07) : Color.primary.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(hovering ? NeoPalette.accent.opacity(0.25) : Color.clear, lineWidth: 0.8)
+        }
+        .scaleEffect(hovering ? 1.005 : 1)
+        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
+        .onHover { hovering = $0 }
     }
 
     /// Seed-derived biome minimap when `level.dat` exposed a seed;
@@ -699,19 +901,11 @@ private struct WorldsTab: View {
         }
     }
 
-    private func worldSubtitle(_ world: WorldInfo) -> String {
+    private var worldSubtitle: String {
         var parts = [Formatters.bytes(world.sizeBytes), world.name]
         if let seed = world.seed { parts.append("seed \(seed)") }
         if let gameType = world.gameType { parts.append(gameType) }
         return parts.joined(separator: " · ")
-    }
-
-    private var radarBinding: Binding<WorldInfo?> {
-        Binding(get: { radarWorld }, set: { radarWorld = $0 })
-    }
-
-    private func reload() {
-        worlds = WorldBackupService.worlds(in: instance)
     }
 }
 
@@ -782,6 +976,41 @@ private struct ConfigTab: View {
 
                 NeoCard {
                     VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "Quick Presets", subtitle: "One-tap profiles for memory & GUI scale", symbol: "wand.and.stars")
+                        HStack(spacing: 10) {
+                            presetChip(
+                                title: "Performance",
+                                detail: "4 GB · GUI 1×",
+                                symbol: "bolt.fill",
+                                tint: NeoPalette.amber
+                            ) {
+                                draft.memoryMB = 4096
+                                draft.guiScale = 1
+                            }
+                            presetChip(
+                                title: "Balanced",
+                                detail: "Auto · GUI Auto",
+                                symbol: "scale.3d",
+                                tint: NeoPalette.accent
+                            ) {
+                                draft.memoryMB = nil
+                                draft.guiScale = nil
+                            }
+                            presetChip(
+                                title: "Quality",
+                                detail: "6 GB · GUI 2×",
+                                symbol: "sparkles",
+                                tint: NeoPalette.violet
+                            ) {
+                                draft.memoryMB = 6144
+                                draft.guiScale = 2
+                            }
+                        }
+                    }
+                }
+
+                NeoCard {
+                    VStack(alignment: .leading, spacing: 12) {
                         SectionHeader(title: "Launch Arguments", subtitle: "Appended to every launch of this instance", symbol: "terminal")
                         VStack(alignment: .leading, spacing: 4) {
                             Text("JVM flags").font(.neoCaption).foregroundStyle(.secondary)
@@ -824,6 +1053,37 @@ private struct ConfigTab: View {
             }
             .padding(.horizontal, 4).padding(.vertical, 8)
         }
+    }
+
+    private func presetChip(
+        title: String,
+        detail: String,
+        symbol: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .bold))
+                    Text(title)
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                }
+                Text(detail)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(tint.opacity(0.20), lineWidth: 0.8)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func apply() {
