@@ -32,7 +32,7 @@ struct SignInSheet: View {
             HStack(spacing: 10) {
                 if browser?.didNotLoad == true, let page = model.signInPage {
                     Text("Microsoft's page didn't load. Check the network.")
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.neoUI(13.0, bold: false))
                         .foregroundStyle(Palette.warning)
                     Button("Try Again") { browser?.load(page) }
                         .buttonStyle(.pixel())

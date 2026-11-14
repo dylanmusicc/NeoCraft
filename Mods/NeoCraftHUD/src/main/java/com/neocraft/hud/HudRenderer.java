@@ -22,6 +22,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.scores.DisplaySlot;
@@ -232,6 +233,7 @@ public final class HudRenderer {
             case "speedometer" -> drawTextWidget(g, mc, w, buildSpeedLines(mc, w));
             case "statusPills" -> drawStatusPills(g, mc, w);
             case "minimap" -> minimap.draw(g, mc, w);
+            case "lightLevel" -> drawTextWidget(g, mc, w, buildLightLines(mc, w));
             default -> { }
         }
     }
@@ -439,6 +441,22 @@ public final class HudRenderer {
         return List.of(String.format(Locale.ROOT, "%.1f B/s", bps));
     }
 
+    /** Block + sky light at the player's feet — the classic "can I see
+     *  without torches" readout for caves and night builds. */
+    private static List<String> buildLightLines(Minecraft mc, HudWidget w) {
+        List<String> out = new ArrayList<>();
+        if (mc.level == null || mc.player == null) return List.of("lightLevel");
+        BlockPos pos = mc.player.blockPosition();
+        if (w.optBool("showBlock", true)) {
+            out.add("Block  " + mc.level.getBrightness(LightLayer.BLOCK, pos));
+        }
+        if (w.optBool("showSky", true)) {
+            out.add("Sky    " + mc.level.getBrightness(LightLayer.SKY, pos));
+        }
+        if (out.isEmpty()) out.add("--");
+        return out;
+    }
+
     private static int[] measureStatusPills(Font font, Minecraft mc, HudWidget w) {
         LocalPlayer p = mc != null ? mc.player : null;
         int wpx = 0;
@@ -471,6 +489,7 @@ public final class HudRenderer {
             case "clocks" -> buildClockLines(mc, w);
             case "dayLight" -> buildDayLightLines(mc, w);
             case "speedometer" -> buildSpeedLines(mc, w);
+            case "lightLevel" -> buildLightLines(mc, w);
             default -> List.of(w.kind);
         };
     }
@@ -545,6 +564,17 @@ public final class HudRenderer {
                 g.fill(x + w - 2, y, x + w, y + h, border);
                 return;
             }
+            case "neocraft" -> {
+                // NeoCraft glass: a dark rounded panel with a subtle
+                // launcher-accent rim and a brighter top hairline —
+                // readable like the vanilla HUD, styled like NeoCraft.
+                int r = UiSync.cornerRadius() + 2;
+                roundedFill(g, x - 1, y - 1, w + 2, h + 2, r, withAlpha(accent, 0.30));
+                roundedFill(g, x, y, w, h, Math.max(2, r - 1), bg);
+                roundedFill(g, x + 2, y, Math.max(0, w - 4), 1, 1, withAlpha(accent, 0.55));
+                roundedFill(g, x, y + h - 1, w, 1, 1, argb(0.25, 0, 0, 0));
+                return;
+            }
             case "liquidGlass" -> {
                 roundedFill(g, x - 1, y - 1, w + 2, h + 2, h / 2 + 1, argb(0.35, 255, 255, 255));
                 roundedFill(g, x, y, w, h, h / 2, bg);
@@ -599,6 +629,17 @@ public final class HudRenderer {
     // Color resolution
     // ------------------------------------------------------------------
 
+    /** Factory-default accent values — widgets/hotbar still carrying one
+     *  of these follow the launcher accent from {@code neocraft_ui.json}. */
+    private static boolean isFactoryAccent(String hex) {
+        if (hex == null) return true;
+        String h = hex.trim();
+        if (h.startsWith("#")) h = h.substring(1);
+        return h.isEmpty()
+                || h.equalsIgnoreCase("0A84FF")
+                || h.equalsIgnoreCase("5B8CFF");
+    }
+
     private static int resolveText(HudWidget w, Minecraft mc) {
         return resolveColor(w, mc, false);
     }
@@ -625,6 +666,12 @@ public final class HudRenderer {
             }
             default -> {
                 String hex = accent ? w.accentColor : w.textColor;
+                // Widgets still carrying a factory-default accent follow
+                // the launcher accent synced through neocraft_ui.json;
+                // custom per-widget colors are left untouched.
+                if (accent && isFactoryAccent(hex)) {
+                    return UiSync.accentColor(0xFF0A84FF);
+                }
                 int fallback = accent ? 0xFF0A84FF : 0xFFFFFFFF;
                 return HudConfig.parseColor(hex, fallback);
             }
@@ -809,7 +856,9 @@ public final class HudRenderer {
         int cx = vw / 2;
         int x0 = cx - 91, x1 = cx + 91;
         int yHot = vh - 22;
-        int accent = HudConfig.parseColor(ui.accentColor, 0xFF0A84FF);
+        int accent = isFactoryAccent(ui.accentColor)
+                ? UiSync.accentColor(0xFF0A84FF)
+                : HudConfig.parseColor(ui.accentColor, 0xFF0A84FF);
         int xpAccent = HudConfig.parseColor(ui.xpAccentColor, 0xFF7CFC00);
 
         Inventory inv = mc.player.getInventory();

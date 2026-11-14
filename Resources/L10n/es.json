@@ -39,12 +39,16 @@
   "settings.language.system": "Idioma del sistema",
   "settings.beta.title": "Funciones beta",
   "settings.beta.subtitle": "Funciones experimentales — desactivadas por defecto y sujetas a cambios",
-  "settings.beta.hud": "HUD en el juego (Neo Studio)",
+  "settings.beta.hud": "Mods NeoCraft en el juego",
   "settings.beta.hud.detail": "Instala el mod HUD complementario en las instancias Fabric y sincroniza el diseño del Studio en el juego. Al desactivar, el mod se elimina de nuevo.",
+  "settings.beta.ui": "Tema de UI en juego",
+  "settings.beta.ui.detail": "Muestra el editor de UI en juego de Neo Studio (tema del mod NeoCraft UI) como beta.",
   "settings.beta.radar": "Radar de seed y biomas",
   "settings.beta.radar.detail": "Muestra un minimapa de biomas derivado del seed y acciones rápidas para cada mundo.",
   "settings.beta.args": "Argumentos de lanzamiento personalizados",
   "settings.beta.args.detail": "Añade campos de argumentos JVM y del juego en el editor de instancia para usuarios avanzados.",
   "settings.beta.bedrock": "Bedrock Edition (beta)",
-  "settings.beta.bedrock.detail": "Añade un selector de edición Java/Bedrock a las instancias. Bedrock funciona a través de NeoCraft Bedrock — Play lo instala bajo demanda."
+  "settings.beta.bedrock.detail": "Añade un selector de edición Java/Bedrock a las instancias. Bedrock funciona a través de NeoCraft Bedrock — Play lo instala bajo demanda.",
+  "settings.beta.bedrockServers": "Alojamiento de servidores Bedrock",
+  "settings.beta.bedrockServers.detail": "Aloja servidores dedicados de Minecraft Bedrock (BDS de Windows vía Wine) en la pestaña Servidores — independiente del juego Bedrock."
 }

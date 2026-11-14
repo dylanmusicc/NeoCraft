@@ -79,13 +79,6 @@ struct WallpaperPickerView: View {
                 colors: [accent.opacity(0.85), glow.opacity(0.7), Color(hex: "0B1220")],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ))
-        case .deepDarkPulse:
-            return AnyShapeStyle(RadialGradient(
-                colors: [glow.opacity(0.55), Color(hex: "05070C"), Color.black],
-                center: .center,
-                startRadius: 4,
-                endRadius: 90
-            ))
         case .cherryPetals:
             return AnyShapeStyle(LinearGradient(
                 colors: [Color(hex: "F7C6D9"), Color(hex: "7A3550"), Color(hex: "24101C")],

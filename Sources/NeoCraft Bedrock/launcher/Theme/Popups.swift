@@ -69,7 +69,7 @@ struct PixelMenuItem<Label: View>: View {
                     PixelImage(image: Artwork.check).frame(width: 12, height: 9)
                 }
             }
-            .font(.system(size: 13, design: .rounded))
+            .font(.neoUI(13.0, bold: false))
             .foregroundStyle(role == .destructive ? Palette.negative : Palette.text)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -96,7 +96,7 @@ struct PixelMenuSection: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .font(.neoUI(11.0, bold: true))
             .foregroundStyle(Palette.secondaryText)
             .padding(.horizontal, 10)
             .padding(.top, 6)
@@ -199,7 +199,7 @@ private struct DialogLayer: View {
             VStack(alignment: .leading, spacing: 12) {
                 TitleText(verbatim: dialog.title, size: 16)
                 Text(verbatim: dialog.message)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {

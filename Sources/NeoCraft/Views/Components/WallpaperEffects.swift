@@ -15,8 +15,6 @@ struct WallpaperEffectLayer: View {
         switch StudioTheme.wallpaperStyle {
         case .plain, .aurora:
             EmptyView()
-        case .deepDarkPulse:
-            DeepDarkPulse()
         case .cherryPetals:
             CherryPetalsField()
         case .endSky:
@@ -63,32 +61,6 @@ struct WallpaperBlooms: View {
                 .blur(radius: 140)
                 .offset(x: placement.x, y: placement.y)
         }
-    }
-}
-
-// MARK: - Deep dark pulse
-
-/// Slow breathing glow — the accent swells and dims like sculk spread.
-struct DeepDarkPulse: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let breath = 0.5 + 0.5 * sin(t * 0.5)
-            let base = colorScheme == .dark ? 0.20 : 0.10
-            Circle()
-                .fill(NeoPalette.glow.opacity(base * (0.55 + 0.45 * breath)))
-                .frame(width: 700, height: 700)
-                .blur(radius: 150)
-                .offset(x: -160, y: 240)
-            Circle()
-                .fill(NeoPalette.accent.opacity(base * 0.5 * (1.0 - 0.4 * breath)))
-                .frame(width: 560, height: 560)
-                .blur(radius: 130)
-                .offset(x: 420, y: -260)
-        }
-        .allowsHitTesting(false)
     }
 }
 

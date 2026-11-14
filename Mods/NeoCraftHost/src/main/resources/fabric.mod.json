@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "neocraft-host",
+  "version": "1.0.0",
+  "name": "NeoCraft Host",
+  "description": "In-game panel for NeoCraft hosted servers: host worlds as dedicated servers, start/stop/restart and live status via the NeoCraft bridge.",
+  "authors": ["NeoCraft"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/neocraft-host/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.neocraft.host.NeoCraftHostClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": ">=26.3",
+    "fabric-api": ">=0.161.0",
+    "java": ">=25"
+  }
+}

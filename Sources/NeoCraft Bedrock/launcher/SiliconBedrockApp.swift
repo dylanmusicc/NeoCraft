@@ -50,7 +50,7 @@ private struct PlayCommands: Commands {
         }
         CommandMenu("Go") {
             let shortcuts: [KeyEquivalent] = ["1", "2", "3", "4", "5", "6", "7"]
-            ForEach(Array(Page.visible.enumerated()), id: \.element) { index, item in
+            ForEach(Array(Page.allCases.enumerated()), id: \.element) { index, item in
                 Button(item.title) {
                     page?.wrappedValue = item
                 }

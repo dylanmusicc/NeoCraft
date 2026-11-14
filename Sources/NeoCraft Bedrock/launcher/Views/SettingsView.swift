@@ -8,9 +8,124 @@ struct SettingsView: View {
         PageScroll {
             PageHeader(title: "Settings", subtitle: "What NeoCraft Bedrock runs every profile on.")
         } content: {
+            AppearancePanel()
             EngineCard()
             GraphicsCard()
             LauncherPanel()
+        }
+    }
+}
+
+/// How the launcher looks. Anything picked here wins over the theme
+/// NeoCraft mirrors; "Use NeoCraft's theme" hands control back.
+private struct AppearancePanel: View {
+    @Environment(\.colorScheme) private var colorScheme
+    /// Bumped to re-render after an override write (NeoSync reloads too).
+    @PlainState private var tick = 0
+
+    private var sync: NeoSync { NeoSync.shared }
+
+    private var wallpaper: Binding<String> {
+        Binding(
+            get: { sync.wallpaperStyle },
+            set: { NeoSync.LauncherTheme.setWallpaper($0 == "" ? nil : $0); NeoSync.shared.reload(); tick += 1 }
+        )
+    }
+
+    private var accent: Binding<String> {
+        Binding(
+            get: { sync.effectiveAccentHex },
+            set: { NeoSync.LauncherTheme.setAccent($0); NeoSync.shared.reload(); tick += 1 }
+        )
+    }
+
+    private var trueBlack: Binding<Bool> {
+        Binding(
+            get: { sync.trueBlack },
+            set: { NeoSync.LauncherTheme.setTrueBlack($0); NeoSync.shared.reload(); tick += 1 }
+        )
+    }
+
+    private var liquidGlass: Binding<Bool> {
+        Binding(
+            get: { sync.liquidGlass },
+            set: { NeoSync.LauncherTheme.setLiquidGlass($0); NeoSync.shared.reload(); tick += 1 }
+        )
+    }
+
+    private var usesOverrides: Bool {
+        _ = tick
+        return NeoSync.LauncherTheme.accentHex != nil
+            || NeoSync.LauncherTheme.wallpaperStyle != nil
+            || NeoSync.LauncherTheme.trueBlack != nil
+            || NeoSync.LauncherTheme.liquidGlass != nil
+    }
+
+    var body: some View {
+        PanelSection(title: "Appearance") {
+            HStack(spacing: 16) {
+                RowLabel("Accent colour", detail: "Buttons, highlights and the backdrop blooms.")
+                Spacer(minLength: 12)
+                HStack(spacing: 8) {
+                    ForEach(NeoSync.accentPresets, id: \.self) { hex in
+                        Button {
+                            accent.wrappedValue = hex
+                        } label: {
+                            Circle()
+                                .fill(NeoSync.color(hex))
+                                .frame(width: 22, height: 22)
+                                .overlay {
+                                    if accent.wrappedValue == hex {
+                                        Image(systemName: "checkmark")
+                                            .font(.neoUI(10, bold: true))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .overlay(Circle().strokeBorder(Palette.ink.opacity(0.4), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .help(hex)
+                    }
+                }
+            }
+
+            Picker(selection: wallpaper) {
+                ForEach(NeoSync.wallpaperOptions, id: \.id) { option in
+                    Label(option.title, systemImage: option.symbol).tag(option.id)
+                }
+            } label: {
+                RowLabel("Wallpaper", detail: "The animated backdrop behind everything.")
+            }
+            .pickerStyle(.menu)
+
+            Toggle(isOn: trueBlack) {
+                RowLabel(
+                    "True black",
+                    detail: "Pure OLED black instead of the navy backdrop — easiest on dark mode."
+                )
+            }
+            .toggleStyle(PixelToggleStyle())
+
+            Toggle(isOn: liquidGlass) {
+                RowLabel(
+                    "Liquid Glass",
+                    detail: "Clearer, glossier panels with brighter edge highlights — the macOS glass look."
+                )
+            }
+            .toggleStyle(PixelToggleStyle())
+
+            if usesOverrides {
+                HStack {
+                    Spacer()
+                    Button("Use NeoCraft's Theme") {
+                        NeoSync.LauncherTheme.reset()
+                        NeoSync.shared.reload()
+                        tick += 1
+                    }
+                    .buttonStyle(.pixel())
+                    .fixedSize()
+                }
+            }
         }
     }
 }

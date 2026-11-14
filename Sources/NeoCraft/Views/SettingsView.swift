@@ -497,6 +497,15 @@ struct SettingsView: View {
             )
             NeoDivider()
             betaToggle(
+                title: L10n.t("settings.beta.ui"),
+                detail: L10n.t("settings.beta.ui.detail"),
+                isOn: Binding(
+                    get: { model.settings.betaFeatures.inGameUI },
+                    set: { model.settings.betaFeatures.inGameUI = $0 }
+                )
+            )
+            NeoDivider()
+            betaToggle(
                 title: L10n.t("settings.beta.radar"),
                 detail: L10n.t("settings.beta.radar.detail"),
                 isOn: Binding(
@@ -520,6 +529,15 @@ struct SettingsView: View {
                 isOn: Binding(
                     get: { model.settings.betaFeatures.bedrockEdition },
                     set: { model.settings.betaFeatures.bedrockEdition = $0 }
+                )
+            )
+            NeoDivider()
+            betaToggle(
+                title: L10n.t("settings.beta.bedrockServers"),
+                detail: L10n.t("settings.beta.bedrockServers.detail"),
+                isOn: Binding(
+                    get: { model.settings.betaFeatures.bedrockServers },
+                    set: { model.settings.betaFeatures.bedrockServers = $0 }
                 )
             )
         }

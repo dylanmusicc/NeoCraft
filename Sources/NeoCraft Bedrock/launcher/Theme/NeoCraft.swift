@@ -32,6 +32,15 @@ extension Font {
     static func neoDisplay(_ size: CGFloat) -> Font {
         .custom(NeoFonts.display, size: size)
     }
+
+    /// Silkscreen as the launcher's everyday face — the "Minecraft font"
+    /// the player asked for everywhere. `size` is the point size the old
+    /// rounded system font used; pixel glyphs run visibly larger, so the
+    /// rendered size is scaled down to match.
+    static func neoUI(_ size: CGFloat, bold: Bool = false) -> Font {
+        let scaled = (size * 0.72 * 2).rounded() / 2
+        return bold ? .neoPixelBold(scaled) : .neoPixel(scaled)
+    }
 }
 
 /// The isometric grass-block cube of NeoCraft's brand mark: a lit top in grass green over dirt
@@ -205,36 +214,29 @@ struct NeoBackdrop: View {
                 VoxelField()
                     .opacity((dark ? 0.55 : 0.4) * sync.gridIntensity)
             }
-            blooms(dark: dark, sync: sync)
+            NeoWallpaperFX()
+            if sync.wallpaperStyle != "plain" {
+                blooms(dark: dark, sync: sync)
+            }
         }
         .ignoresSafeArea()
     }
 
     @ViewBuilder
     private func blooms(dark: Bool, sync: NeoSync) -> some View {
-        switch sync.wallpaperStyle {
-        case "plain":
-            EmptyView()
-        case "deepDarkPulse":
-            // One wide breathing bloom in the accent, like NeoCraft's OLED focus mode.
+        // Aurora Bloom and the particle styles: the accent and glow pair —
+        // or the player's custom gradient stops — blurred wide. Deep Dark
+        // Pulse and the animated fields draw their own glow on top.
+        let colors = sync.bloomColors
+        ForEach(colors.indices, id: \.self) { index in
             Circle()
-                .fill(sync.accent.opacity(dark ? 0.20 : 0.15))
-                .frame(width: 900, height: 900)
-                .blur(radius: 180)
-        default:
-            // Aurora Bloom and the particle styles: the accent and glow pair —
-            // or the player's custom gradient stops — blurred wide.
-            let colors = sync.bloomColors
-            ForEach(colors.indices, id: \.self) { index in
-                Circle()
-                    .fill(colors[index].opacity(dark ? 0.16 : 0.13))
-                    .frame(width: index == 0 ? 620 : 520, height: index == 0 ? 620 : 520)
-                    .blur(radius: 140)
-                    .offset(
-                        x: index == 0 ? 380 : -420,
-                        y: index == 0 ? -330 : 400
-                    )
-            }
+                .fill(colors[index].opacity(dark ? 0.16 : 0.13))
+                .frame(width: index == 0 ? 620 : 520, height: index == 0 ? 620 : 520)
+                .blur(radius: 140)
+                .offset(
+                    x: index == 0 ? 380 : -420,
+                    y: index == 0 ? -330 : 400
+                )
         }
     }
 }

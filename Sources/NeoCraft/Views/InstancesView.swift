@@ -3,8 +3,17 @@ import SwiftUI
 struct InstancesView: View {
     @Environment(AppModel.self) private var model
 
+    private var bedrockEnabled: Bool {
+        model.settings.betaFeatures.bedrockEdition
+    }
+
     private var filteredInstances: [GameInstance] {
         var result = model.instances
+        // Bedrock is a beta feature — while it's off, Bedrock instances
+        // disappear from the launcher entirely.
+        if !bedrockEnabled {
+            result = result.filter { $0.edition != .bedrock }
+        }
         if let edition = model.instanceEditionFilter {
             result = result.filter { $0.edition == edition }
         }
@@ -28,7 +37,9 @@ struct InstancesView: View {
                         Picker("Edition", selection: editionFilterBinding) {
                             Text("All").tag("")
                             Text("Java").tag("java")
-                            Text("Bedrock").tag("bedrock")
+                            if bedrockEnabled {
+                                Text("Bedrock").tag("bedrock")
+                            }
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()

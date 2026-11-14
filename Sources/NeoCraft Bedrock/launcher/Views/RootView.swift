@@ -3,17 +3,9 @@ import LauncherCore
 import SwiftUI
 
 enum Page: CaseIterable, Identifiable {
-    case play, instances, studio, servers, screenshots, account, settings
-
-    /// Pages that only exist as part of the NeoCraft beta track — they mirror
-    /// NeoCraft's own data (its theme, Java servers) and stay hidden until the
-    /// `bedrockEdition` beta flag is on in NeoCraft's settings.
-    var isNeoCraftSynced: Bool { self == .studio || self == .servers }
-
-    /// The pages the sidebar and menus offer right now.
-    static var visible: [Page] {
-        allCases.filter { !$0.isNeoCraftSynced || NeoCraftFiles.betaEnabled() }
-    }
+    /// Studio, Servers and Screenshots are managed in the main NeoCraft app —
+    /// this launcher only mirrors NeoCraft's theme via `NeoSync`.
+    case play, instances, account, settings
 
     var id: Self { self }
 
@@ -21,9 +13,6 @@ enum Page: CaseIterable, Identifiable {
         switch self {
         case .play: "Play"
         case .instances: "Instances"
-        case .studio: "Studio"
-        case .servers: "Servers"
-        case .screenshots: "Screenshots"
         case .account: "Account"
         case .settings: "Settings"
         }
@@ -34,9 +23,6 @@ enum Page: CaseIterable, Identifiable {
         switch self {
         case .play: "play.circle.fill"
         case .instances: "square.stack.3d.up.fill"
-        case .studio: "paintbrush.pointed.fill"
-        case .servers: "server.rack"
-        case .screenshots: "photo.stack.fill"
         case .account: "person.crop.circle.fill"
         case .settings: "gearshape.fill"
         }
@@ -54,11 +40,8 @@ extension FocusedValues {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @PlainState private var page = Page.play
-    /// The page actually on screen — a synced page falls back to Play when the
-    /// NeoCraft beta flag is off.
-    private var effectivePage: Page {
-        page.isNeoCraftSynced && !NeoCraftFiles.betaEnabled() ? .play : page
-    }
+    /// The page actually on screen.
+    private var effectivePage: Page { page }
 
     /// What the Profiles page shows instead of the list.
     @PlainState private var profileDetail: ProfileDetail?
@@ -93,9 +76,6 @@ struct RootView: View {
                                 go: { page = $0 }
                             )
                         case .instances: ProfilesView(detail: $profileDetail)
-                        case .studio: StudioView()
-                        case .servers: ServersView()
-                        case .screenshots: ScreenshotsView()
                         case .account: AccountView()
                         case .settings: SettingsView()
                         }
@@ -114,6 +94,7 @@ struct RootView: View {
                     dropTargeted = $0
                 }
                 .tint(Palette.accent)
+                .environment(\.font, Font.neoUI(13))
                 .overlay {
                     if dropTargeted {
                         DropTarget(product: openContentsProduct)
@@ -228,7 +209,7 @@ private struct Sidebar: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text("BEDROCK EDITION")
-                        .font(.system(size: 7.5, weight: .bold, design: .rounded))
+                        .font(.neoUI(7.5, bold: true))
                         .tracking(1.2)
                         .foregroundStyle(.secondary)
                 }
@@ -239,7 +220,7 @@ private struct Sidebar: View {
             .padding(.bottom, 18)
 
             VStack(spacing: 3) {
-                ForEach(Page.visible) { item in
+                ForEach(Page.allCases) { item in
                     NavigationItem(
                         title: item.title, symbol: item.symbol, selected: item == page
                     ) {
@@ -277,7 +258,7 @@ private struct DropTarget: View {
         VStack(spacing: 10) {
             TitleText("Drop to add", size: 20)
             Text(verbatim: detail)
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
         }
         .padding(24)
@@ -309,11 +290,11 @@ private struct UnreadableLibrary: View {
         VStack(alignment: .leading, spacing: 12) {
             TitleText("NeoCraft Bedrock can't read its settings", size: 20)
             Text(verbatim: reason)
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Until it can, NeoCraft Bedrock changes none of its files.")
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
             RevealButton("Show in Finder", url: model.directory.library)
         }
@@ -348,7 +329,7 @@ private struct Activity: View {
                 VStack(alignment: .leading, spacing: 6) {
                     TitleText(verbatim: String(localized: "Installing"), size: 12)
                     Text(verbatim: model.name(of: profile))
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.neoUI(12.0, bold: false))
                         .foregroundStyle(Palette.secondaryText)
                     ProgressBar(value: install.progress?.fraction ?? 0)
                 }
@@ -360,7 +341,7 @@ private struct Activity: View {
                     VStack(alignment: .leading, spacing: 6) {
                         TitleText(verbatim: title(of: session), size: 12, color: Palette.positive)
                         Text(verbatim: "\(model.name(of: profile))\n\(account.label)")
-                            .font(.system(size: 12, design: .rounded))
+                            .font(.neoUI(12.0, bold: false))
                             .foregroundStyle(Palette.secondaryText)
                     }
                 }
@@ -395,7 +376,7 @@ private struct NavigationItem: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(.neoUI(13.5, bold: true))
                     .foregroundStyle(
                         selected ? Color.white : (hovered ? Palette.accent : Color.secondary))
                     .frame(width: 24)

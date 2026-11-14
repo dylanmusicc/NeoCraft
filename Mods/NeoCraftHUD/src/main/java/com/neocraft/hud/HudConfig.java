@@ -51,7 +51,7 @@ public final class HudConfig {
     public static final List<String> KINDS = List.of(
             "fpsPill", "coordsCompass", "netherCoords", "armorDurability",
             "potionEffects", "keystrokes", "pingTPS", "clocks", "dayLight",
-            "speedometer", "statusPills", "minimap");
+            "speedometer", "statusPills", "minimap", "lightLevel");
 
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting().disableHtmlEscaping().create();
@@ -95,7 +95,7 @@ public final class HudConfig {
         public double y = 0.05;
         public double scale = 1.0;
         public boolean visible = true;
-        public String containerStyle = "minecraft";
+        public String containerStyle = "neocraft";
         public String fontStyle = "apple";
         public String textStyle = "regular";
         public String colorMode = "static";
@@ -242,6 +242,7 @@ public final class HudConfig {
             case "speedometer" -> new double[]{0.5, 0.92};
             case "statusPills" -> new double[]{0.5, 0.55};
             case "minimap" -> new double[]{0.86, 0.2};
+            case "lightLevel" -> new double[]{0.5, 0.40};
             default -> new double[]{0.5, 0.05}; // fpsPill
         };
     }
@@ -287,6 +288,9 @@ public final class HudConfig {
             case "speedometer" -> m.put("unit", "bps");
             case "statusPills" -> {
                 m.put("showSprint", true); m.put("showSneak", true);
+            }
+            case "lightLevel" -> {
+                m.put("showSky", true); m.put("showBlock", true);
             }
             default -> { }
         }
@@ -372,7 +376,7 @@ public final class HudConfig {
         w.y = clamp01(num(o, "y", d[1]));
         w.scale = clamp(num(o, "scale", 1.0), 0.25, 4.0);
         w.visible = bool(o, "visible", true);
-        w.containerStyle = str(o, "containerStyle", "minecraft");
+        w.containerStyle = str(o, "containerStyle", "neocraft");
         w.fontStyle = str(o, "fontStyle", "apple");
         w.textStyle = str(o, "textStyle", "regular");
         w.colorMode = str(o, "colorMode", "static");

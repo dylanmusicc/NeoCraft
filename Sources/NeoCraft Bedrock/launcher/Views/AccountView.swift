@@ -20,7 +20,7 @@ struct AccountView: View {
                     VStack(spacing: 10) {
                         TitleText("No account yet", size: 16)
                         Text("Add your Microsoft account to install and play Minecraft.")
-                            .font(.system(size: 13, design: .rounded))
+                            .font(.neoUI(13.0, bold: false))
                             .foregroundStyle(Palette.secondaryText)
                     }
                     .frame(maxWidth: .infinity)
@@ -79,7 +79,7 @@ struct AccountView: View {
 
     private func statusPill(_ title: LocalizedStringKey, colour: Color) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .font(.neoUI(11.0, bold: true))
             .foregroundStyle(colour)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)

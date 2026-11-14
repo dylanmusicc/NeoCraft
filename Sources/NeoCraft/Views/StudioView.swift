@@ -14,11 +14,12 @@ struct StudioView: View {
     @State private var studioSection: StudioSection = .hud
 
     private enum StudioSection: String, CaseIterable, Identifiable {
-        case hud, themes, dashboard, audio
+        case hud, uiTheme, themes, dashboard, audio
         var id: String { rawValue }
         var title: String {
             switch self {
             case .hud: "In-Game HUD"
+            case .uiTheme: "In-Game UI"
             case .themes: "Themes & Colors"
             case .dashboard: "Play Dashboard"
             case .audio: "Audio"
@@ -27,6 +28,7 @@ struct StudioView: View {
         var symbol: String {
             switch self {
             case .hud: "rectangle.on.rectangle"
+            case .uiTheme: "rectangle.3.group"
             case .themes: "paintpalette.fill"
             case .dashboard: "rectangle.grid.2x2.fill"
             case .audio: "speaker.wave.2.fill"
@@ -34,18 +36,26 @@ struct StudioView: View {
         }
     }
 
-    /// Sections offered in the picker — the in-game HUD is a beta feature
-    /// and only listed while enabled in Settings.
-    private var visibleSections: [StudioSection] {
-        StudioSection.allCases.filter {
-            $0 != .hud || model.settings.betaFeatures.inGameHUD
+    /// Sections offered in the picker — the in-game HUD/host mods and the
+    /// in-game UI theme are beta features; app appearance ships to all.
+    private var betaGated: Set<StudioSection> { [.hud, .uiTheme] }
+
+    private func betaEnabled(for section: StudioSection) -> Bool {
+        switch section {
+        case .hud: return model.settings.betaFeatures.inGameHUD
+        case .uiTheme: return model.settings.betaFeatures.inGameUI
+        default: return true
         }
     }
 
+    private var visibleSections: [StudioSection] {
+        StudioSection.allCases.filter { betaEnabled(for: $0) }
+    }
+
     /// The section actually rendered; falls back when the stored selection
-    /// is the hidden HUD section.
+    /// is a hidden beta section.
     private var effectiveSection: StudioSection {
-        if studioSection == .hud && !model.settings.betaFeatures.inGameHUD {
+        if !betaEnabled(for: studioSection) {
             return visibleSections.first ?? .themes
         }
         return studioSection
@@ -74,6 +84,7 @@ struct StudioView: View {
 
                 switch effectiveSection {
                 case .hud: hudSection
+                case .uiTheme: uiThemeSection
                 case .themes: themesSection
                 case .dashboard: dashboardSection
                 case .audio: audioSection
@@ -86,10 +97,183 @@ struct StudioView: View {
             if selectedWidgetID == nil {
                 selectedWidgetID = model.settings.hudLayout.widgets.first?.id
             }
-            if studioSection == .hud && !model.settings.betaFeatures.inGameHUD {
+            if !betaEnabled(for: studioSection) {
                 studioSection = .themes
             }
         }
+    }
+
+    // MARK: - In-Game UI section (neocraft-ui mod theme)
+
+    /// Theme for the `neocraft-ui` Fabric mod: accent tints on the title,
+    /// pause, death and options screens, plus an optional full NeoCraft
+    /// redesign. Written to `config/neocraft_ui.json` on apply and on
+    /// every Fabric launch.
+    private var uiThemeSection: some View {
+        NeoCard {
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(
+                    title: "In-Game UI",
+                    subtitle: "NeoCraft theme for the vanilla screens and the in-game NeoCraft menu (N key). Requires a Fabric instance.",
+                    symbol: "rectangle.3.group"
+                )
+
+                Toggle(isOn: Binding(
+                    get: { model.settings.uiTheme.enabled },
+                    set: { model.settings.uiTheme.enabled = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable NeoCraft UI")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        Text("Applies the accent theme to in-game screens.")
+                            .font(.system(size: 10, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(NeoToggleStyle())
+
+                Toggle(isOn: Binding(
+                    get: { model.settings.uiTheme.fullRedesign },
+                    set: { model.settings.uiTheme.fullRedesign = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Full NeoCraft redesign")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        Text("Gradient backdrop and NeoCraft wordmark instead of a plain tint.")
+                            .font(.system(size: 10, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(NeoToggleStyle())
+
+                NeoDivider()
+
+                Toggle(isOn: Binding(
+                    get: { model.settings.uiTheme.followLauncherAccent },
+                    set: { model.settings.uiTheme.followLauncherAccent = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Follow launcher accent")
+                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        Text("In-game menus and screen tints use the launcher accent from Themes & Colors — always in sync.")
+                            .font(.system(size: 10, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(NeoToggleStyle())
+
+                NeoDivider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Colors")
+                        .font(.neoHeadline)
+                    HStack(spacing: 12) {
+                        ForEach(NeoAccent.allCases) { accent in
+                            uiAccentSwatch(accent)
+                        }
+                        Spacer()
+                    }
+                    .disabled(model.settings.uiTheme.followLauncherAccent)
+                    .opacity(model.settings.uiTheme.followLauncherAccent ? 0.45 : 1)
+                    colorMixerRow(
+                        title: "Accent",
+                        symbol: "paintpalette",
+                        hex: model.settings.uiTheme.accentHex
+                    ) { model.settings.uiTheme.accentHex = $0 }
+                    .disabled(model.settings.uiTheme.followLauncherAccent)
+                    .opacity(model.settings.uiTheme.followLauncherAccent ? 0.45 : 1)
+                    colorMixerRow(
+                        title: "Screen Tint",
+                        symbol: "rectangle.on.rectangle",
+                        hex: model.settings.uiTheme.tintHex,
+                        allowEmpty: true
+                    ) { model.settings.uiTheme.tintHex = $0 }
+                    Text("Leave the tint empty to follow the accent color.")
+                        .font(.neoCaption)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Tint strength")
+                                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                            Spacer()
+                            Text("\(Int((model.settings.uiTheme.tintOpacity * 100).rounded()))%")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { model.settings.uiTheme.tintOpacity },
+                                set: { model.settings.uiTheme.tintOpacity = $0 }
+                            ),
+                            in: 0...0.6
+                        )
+                    }
+                }
+
+                NeoDivider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Screens")
+                        .font(.neoHeadline)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                        uiScreenToggle("Title screen", key: \.screenTitle)
+                        uiScreenToggle("Pause menu", key: \.screenPause)
+                        uiScreenToggle("Death screen", key: \.screenDeath)
+                        uiScreenToggle("Options", key: \.screenOptions)
+                    }
+                }
+
+                NeoDivider()
+
+                HStack {
+                    Text("Writes config/neocraft_ui.json — the mod hot-reloads it in-game.")
+                        .font(.neoCaption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        model.applyUIThemeToInstance()
+                    } label: {
+                        Label("Apply UI Theme", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(NeoButtonStyle(kind: .primary))
+                    .disabled(model.selectedInstance?.loader != .fabric)
+                    .help(model.selectedInstance?.loader == .fabric
+                          ? ""
+                          : "The UI theme mod is a Fabric mod — switch the instance to Fabric first")
+                }
+            }
+        }
+    }
+
+    private func uiScreenToggle(_ title: String, key: WritableKeyPath<NeoCraftUITheme, Bool>) -> some View {
+        Toggle(isOn: Binding(
+            get: { model.settings.uiTheme[keyPath: key] },
+            set: { model.settings.uiTheme[keyPath: key] = $0 }
+        )) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+        }
+        .toggleStyle(.checkbox)
+    }
+
+    private func uiAccentSwatch(_ accent: NeoAccent) -> some View {
+        let selected = model.settings.uiTheme.accentHex == accent.rawValue
+        return Button {
+            model.settings.uiTheme.accentHex = accent.rawValue
+        } label: {
+            Circle()
+                .fill(Color(hex: accent.rawValue))
+                .frame(width: 26, height: 26)
+                .overlay {
+                    if selected {
+                        Circle().strokeBorder(Color.white, lineWidth: 2)
+                    } else {
+                        Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.8)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .help(accent.name)
     }
 
     // MARK: - Themes section (appearance + layout)

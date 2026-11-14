@@ -24,7 +24,7 @@ struct PageHeader<Trailing: View>: View {
                     .foregroundStyle(.primary)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.neoUI(13.0, bold: false))
                         .foregroundStyle(.secondary)
                 }
             }

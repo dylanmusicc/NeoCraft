@@ -351,16 +351,13 @@ final class AppModel {
         NSApp.activate()
     }
 
-    /// With the last game gone the launcher quits, or comes back if it has a problem to tell.
-    /// A `--play` launch has no windows of its own, so it decides by its notice alone.
+    /// With the last game gone the launcher comes back on screen — it never
+    /// quits just because Minecraft closed, not even for a `--play` launch
+    /// NeoCraft started headless: the window simply appears again.
     private func returnFromGame() {
         guard sessions.isEmpty else { return }
         if windowsLeft != nil || autoPlay {
-            if notice?.kind == .problem {
-                showLauncher()
-            } else {
-                NSApp.terminate(nil)
-            }
+            showLauncher()
         }
     }
 

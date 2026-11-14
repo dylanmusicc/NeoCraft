@@ -33,6 +33,9 @@ final class NeoSync {
     private(set) var glassBlur = 0.5
     private(set) var cornerRadiusScale: CGFloat = 1
     private(set) var gradientHexes: [String] = []
+    /// Launcher-local "Liquid Glass" look: clearer materials and softer
+    /// panel edges, inspired by Apple's glass design language.
+    private(set) var liquidGlass = false
 
     private init() {
         defaults = UserDefaults(suiteName: Self.neoCraftDefaults)
@@ -47,8 +50,12 @@ final class NeoSync {
 
     /// The accent NeoCraft renders right now: the dynamic mode's hour table and the biome
     /// mode's synced accent are resolved here exactly like `StudioTheme.effectiveAccentHex`.
+    /// A launcher accent override wins over all of them.
     var effectiveAccentHex: String {
         _ = revision
+        if let override = LauncherTheme.accentHex, !override.isEmpty {
+            return override
+        }
         switch themeMode {
         case "dynamic":
             switch Calendar.current.component(.hour, from: Date()) {
@@ -83,8 +90,11 @@ final class NeoSync {
         return Color(.sRGB, red: Double(rgb.0) / 255, green: Double(rgb.1) / 255, blue: Double(rgb.2) / 255)
     }
 
-    /// Pure-OLED mode paints true black instead of the navy backdrop.
-    var trueBlack: Bool { themeMode == "oled" }
+    /// Pure-OLED mode paints true black instead of the navy backdrop —
+    /// or the launcher's own override when one is set.
+    var trueBlack: Bool {
+        LauncherTheme.trueBlack ?? (themeMode == "oled")
+    }
 
     /// Neo Studio's radius preset and corner treatment applied to a base radius.
     func radius(_ base: CGFloat) -> CGFloat {
@@ -106,20 +116,29 @@ final class NeoSync {
 
     func reload() {
         guard let defaults else { return }
-        let accent = defaults.string(forKey: "neoCraft.theme.accentHex") ?? "5B8CFF"
+        let accent = LauncherTheme.accentHex.flatMap { $0.isEmpty ? nil : $0 }
+            ?? defaults.string(forKey: "neoCraft.theme.accentHex") ?? "5B8CFF"
         let next = (
             accent: accent.isEmpty ? "5B8CFF" : accent,
             glow: defaults.string(forKey: "neoCraft.theme.glowHex") ?? "A78BFA",
             tint: defaults.string(forKey: "neoCraft.theme.cardTintHex") ?? "",
             mode: defaults.string(forKey: "neoCraft.theme.mode") ?? "frosted",
-            grid: defaults.object(forKey: "neoCraft.theme.gridIntensity") as? Double ?? 1.0,
+            grid: LauncherTheme.gridIntensity
+                ?? defaults.object(forKey: "neoCraft.theme.gridIntensity") as? Double ?? 1.0,
             corner: defaults.string(forKey: "neoCraft.theme.cornerStyle") ?? "rounded",
             material: defaults.object(forKey: "neoCraft.theme.sidebarMaterial") as? Double ?? 0.5,
-            wallpaper: defaults.string(forKey: "neoCraft.theme.wallpaperStyle") ?? "aurora",
+            wallpaper: {
+                // Unknown/removed styles (e.g. the old deepDarkPulse)
+                // fall back to aurora instead of rendering nothing.
+                let raw = LauncherTheme.wallpaperStyle
+                    ?? defaults.string(forKey: "neoCraft.theme.wallpaperStyle") ?? "aurora"
+                return NeoSync.wallpaperOptions.contains { $0.id == raw } ? raw : "aurora"
+            }(),
             glass: defaults.object(forKey: "neoCraft.theme.glassBlur") as? Double ?? 0.5,
             radius: defaults.string(forKey: "neoCraft.theme.cornerRadiusPreset") ?? "regular",
             gradient: (defaults.string(forKey: "neoCraft.theme.gradientHexes") ?? "")
                 .split(separator: ",").map(String.init).filter { !$0.isEmpty },
+            liquid: LauncherTheme.liquidGlass ?? false,
             beta: NeoCraftFiles.betaEnabled()
         )
         // The dynamic accent also drifts with the hour — poll it into `revision` too.
@@ -130,6 +149,7 @@ final class NeoSync {
             || next.material != sidebarMaterial || next.wallpaper != wallpaperStyle
             || next.glass != glassBlur
             || next.radius != radiusKey || next.gradient != gradientHexes || hourBucket != lastHourBucket
+            || next.liquid != liquidGlass
             || next.beta != neoCraftBeta
         guard changed else { return }
         lastHourBucket = hourBucket
@@ -149,6 +169,7 @@ final class NeoSync {
         }
         radiusKey = next.radius
         gradientHexes = next.gradient
+        liquidGlass = next.liquid
         neoCraftBeta = next.beta
         revision += 1
     }
@@ -157,6 +178,82 @@ final class NeoSync {
     private var lastHourBucket = -2
     /// NeoCraft's `bedrockEdition` beta flag — gates the synced pages.
     private(set) var neoCraftBeta = false
+
+    // MARK: Launcher-local appearance overrides
+
+    /// The Bedrock component can be styled on its own — Settings →
+    /// Appearance and the first-run wizard write these keys into the
+    /// launcher's own defaults. Whatever is set wins over the mirrored
+    /// NeoCraft theme; "Reset to NeoCraft" clears them.
+    enum LauncherTheme {
+        static let accentKey = "bedrock.appearance.accentHex"
+        static let wallpaperKey = "bedrock.appearance.wallpaperStyle"
+        static let blackKey = "bedrock.appearance.trueBlack"
+        static let gridKey = "bedrock.appearance.gridIntensity"
+        static let liquidKey = "bedrock.appearance.liquidGlass"
+
+        static var accentHex: String? { UserDefaults.standard.string(forKey: accentKey) }
+        static var wallpaperStyle: String? { UserDefaults.standard.string(forKey: wallpaperKey) }
+        static var trueBlack: Bool? { UserDefaults.standard.object(forKey: blackKey) as? Bool }
+        static var liquidGlass: Bool? { UserDefaults.standard.object(forKey: liquidKey) as? Bool }
+        static var gridIntensity: Double? {
+            UserDefaults.standard.object(forKey: gridKey) as? Double
+        }
+
+        static func setAccent(_ hex: String?) {
+            UserDefaults.standard.set(hex, forKey: accentKey)
+        }
+
+        static func setWallpaper(_ style: String?) {
+            UserDefaults.standard.set(style, forKey: wallpaperKey)
+        }
+
+        static func setTrueBlack(_ value: Bool?) {
+            if let value {
+                UserDefaults.standard.set(value, forKey: blackKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: blackKey)
+            }
+        }
+
+        static func setGridIntensity(_ value: Double?) {
+            if let value {
+                UserDefaults.standard.set(value, forKey: gridKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: gridKey)
+            }
+        }
+
+        static func setLiquidGlass(_ value: Bool?) {
+            if let value {
+                UserDefaults.standard.set(value, forKey: liquidKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: liquidKey)
+            }
+        }
+
+        static func reset() {
+            for key in [accentKey, wallpaperKey, blackKey, gridKey, liquidKey] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+    }
+
+    /// Accent swatches offered by the Appearance pickers.
+    static let accentPresets = [
+        "5B8CFF", "38BDF8", "4ADE80", "2DD4BF",
+        "FBBF24", "FB923C", "F472B6", "A78BFA",
+    ]
+
+    /// Wallpaper styles the launcher can render — same raw values NeoCraft
+    /// writes into `neoCraft.theme.wallpaperStyle`.
+    static let wallpaperOptions: [(id: String, title: String, symbol: String)] = [
+        ("aurora", "Aurora Bloom", "waveform.path"),
+        ("cherryPetals", "Cherry Petals", "petal"),
+        ("endSky", "End Sky", "sparkle"),
+        ("netherEmbers", "Nether Embers", "flame.fill"),
+        ("plain", "Flat Gradient", "square"),
+    ]
 
     static func color(_ hex: String) -> Color {
         guard let rgb = rgb(hex) else { return Color(hex: 0x5B8CFF) }

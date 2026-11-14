@@ -10,8 +10,62 @@ struct DashboardCustomizerView: View {
         model.settings.orderedDashboardKinds
     }
 
+    /// Curated Play-dashboard layouts — one click sets the hero style,
+    /// the enabled widget set and their order.
+    private enum DashboardPreset: String, CaseIterable, Identifiable {
+        case clean, minimal, full, telemetry
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .clean: "Clean"
+            case .minimal: "Minimal"
+            case .full: "Full"
+            case .telemetry: "Telemetry"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .clean: "sparkles"
+            case .minimal: "minus.rectangle"
+            case .full: "rectangle.grid.2x2.fill"
+            case .telemetry: "waveform.path.ecg"
+            }
+        }
+        var widgets: [DashboardCardKind] {
+            switch self {
+            case .clean: [.memory, .activity, .screenshots]
+            case .minimal: [.activity]
+            case .full: DashboardCardKind.allCases
+            case .telemetry: [.memory, .thermal, .boost, .flightCheck]
+            }
+        }
+        var hero: String {
+            switch self {
+            case .clean, .minimal: "compact"
+            case .full: "banner"
+            case .telemetry: "glass"
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Presets
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Presets")
+                    .font(.neoHeadline)
+                HStack(spacing: 8) {
+                    ForEach(DashboardPreset.allCases) { preset in
+                        presetButton(preset)
+                    }
+                }
+                Text("Presets set the hero style, widget set and order — fine-tune below.")
+                    .font(.neoCaption)
+                    .foregroundStyle(.secondary)
+            }
+
+            NeoDivider()
+
             // Hero card style
             VStack(alignment: .leading, spacing: 8) {
                 Text("Hero card style")
@@ -65,6 +119,42 @@ struct DashboardCustomizerView: View {
                 WallpaperPickerView()
             }
         }
+    }
+
+    // MARK: Presets
+
+    private func presetButton(_ preset: DashboardPreset) -> some View {
+        let selected = model.settings.dashboardWidgetOrder == preset.widgets.map(\.rawValue)
+            && model.settings.dashboardCards == preset.widgets.map(\.rawValue)
+            && model.settings.heroCardStyle == preset.hero
+        return Button {
+            model.settings.dashboardCards = preset.widgets.map(\.rawValue)
+            model.settings.dashboardWidgetOrder = preset.widgets.map(\.rawValue)
+            model.settings.heroCardStyle = preset.hero
+            model.showToast("\(preset.title) preset applied")
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: preset.symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(selected ? NeoPalette.accent : .secondary)
+                Text(preset.title)
+                    .font(.neoCaption.weight(.semibold))
+                    .foregroundStyle(selected ? .primary : .secondary)
+            }
+            .frame(width: 74, height: 52)
+            .background(
+                selected ? NeoPalette.accent.opacity(0.12) : Color.primary.opacity(0.04),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        selected ? NeoPalette.accent.opacity(0.45) : Color.primary.opacity(0.08),
+                        lineWidth: selected ? 1.2 : 0.8
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Hero style

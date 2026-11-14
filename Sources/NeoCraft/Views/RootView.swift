@@ -109,10 +109,8 @@ struct RootView: View {
             PlayView()
         case .instances:
             InstancesView()
-        case .servers:
+        case .servers, .dashboard:
             ServersView()
-        case .dashboard:
-            DashboardView()
         case .studio:
             StudioView()
         case .mods:
@@ -260,6 +258,9 @@ struct SidebarView: View {
         where !hidden.contains(section.rawValue) && !result.contains(section) {
             result.append(section)
         }
+        // The dashboard moved into the Servers tab (master-detail); the
+        // section stays in the enum for settings compatibility only.
+        result.removeAll { $0 == .dashboard }
         // Java mod ecosystem doesn't exist for Bedrock — hide the library
         // entirely while a Bedrock instance is selected.
         if model.selectedInstance?.edition == .bedrock {
@@ -282,7 +283,7 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
 
-            if !model.hostedServers.isEmpty {
+            if !model.visibleHostedServers.isEmpty {
                 hostedServersGroup
                     .padding(.horizontal, 10)
                     .padding(.top, 14)
@@ -363,8 +364,8 @@ struct SidebarView: View {
                     badge("\(model.modUpdates.count)↑", selected: selected, tint: NeoPalette.amber, filled: true)
                 } else if section == .mods, !model.installedProjectIDs.isEmpty {
                     badge("\(model.installedProjectIDs.count)", selected: selected)
-                } else if section == .dashboard, !model.hostedServers.isEmpty {
-                    badge("\(model.hostedServers.count)", selected: selected)
+                } else if section == .servers, !model.visibleHostedServers.isEmpty {
+                    badge("\(model.visibleHostedServers.count)", selected: selected)
                 } else if section == .play, model.isGameRunning {
                     StatusDot(color: NeoPalette.mint, size: 6)
                 } else if section == .mods, model.isSearchingMods {
@@ -429,14 +430,14 @@ struct SidebarView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 2)
 
-            ForEach(model.hostedServers.prefix(5)) { server in
+            ForEach(model.visibleHostedServers.prefix(5)) { server in
                 hostedServerRow(server)
             }
-            if model.hostedServers.count > 5 {
+            if model.visibleHostedServers.count > 5 {
                 Button {
-                    model.go(to: .dashboard)
+                    model.go(to: .servers)
                 } label: {
-                    Text("+\(model.hostedServers.count - 5) more")
+                    Text("+\(model.visibleHostedServers.count - 5) more")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
@@ -453,7 +454,7 @@ struct SidebarView: View {
         let running = model.isServerRunning(server)
         let ready = model.isServerReady(server)
         let settingUp = model.isSettingUpServer(server)
-        let selected = model.section == .dashboard && model.dashboardServer?.id == server.id
+        let selected = model.section == .servers && model.dashboardServer?.id == server.id
         let color: Color = settingUp ? NeoPalette.amber
             : running ? (ready ? NeoPalette.mint : NeoPalette.sky)
             : Color.secondary

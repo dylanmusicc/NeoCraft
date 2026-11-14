@@ -14,7 +14,7 @@ PACKAGES=$WORK/engine/packages
 VERSION=$(cat "$ROOT/VERSION")
 ENGINE_VERSION=$(cat "$ROOT/engine/VERSION")
 GPTK=$ROOT/third_party/gptk-4.0b3
-APP=$ROOT/dist/NeoCraft Bedrock.app
+APP="$ROOT/dist/NeoCraft Bedrock.app"
 CONTENTS=$APP/Contents
 RESOURCES=$CONTENTS/Resources
 
@@ -32,6 +32,9 @@ SERVICE=$ROOT/Vendor/engine
 printf '==> Building the launcher\n'
 # The paths the compiler records are remapped, so that the binary doesn't name the builder's folders.
 swift build --package-path "$ROOT" --scratch-path "$WORK/app" -c release --product SiliconBedrock \
+  -Xswiftc -file-prefix-map -Xswiftc "$ROOT=/NeoCraftBedrock" \
+  -Xswiftc -file-prefix-map -Xswiftc "$HOME=/builder"
+swift build --package-path "$ROOT" --scratch-path "$WORK/app" -c release --product bedrock-host \
   -Xswiftc -file-prefix-map -Xswiftc "$ROOT=/NeoCraftBedrock" \
   -Xswiftc -file-prefix-map -Xswiftc "$HOME=/builder"
 BIN=$(swift build --package-path "$ROOT" --scratch-path "$WORK/app" -c release --show-bin-path)
@@ -54,6 +57,8 @@ for lproj in "$ROOT"/Config/L10n/*.lproj; do
 done
 
 cp "$SERVICE/xodus-service" "$CONTENTS/Helpers/xodus-service"
+cp "$BIN/bedrock-host" "$CONTENTS/Helpers/bedrock-host"
+strip -S -x "$CONTENTS/Helpers/bedrock-host"
 cp "$SERVICE/service-pin.json" "$RESOURCES/Engine/"
 cp -R "$SERVICE/Licenses" "$RESOURCES/Engine/"
 cp "$PACKAGES/index.json" "$PACKAGES/macrock-engine-$ENGINE_VERSION.aar" "$RESOURCES/Engine/"
@@ -67,4 +72,5 @@ codesign --force --options runtime --timestamp=none --identifier dev.siliconbedr
   --sign "$IDENTITY" "$APP"
 codesign --verify --strict "$APP"
 codesign --verify --strict "$CONTENTS/Helpers/xodus-service"
+codesign --verify --strict "$CONTENTS/Helpers/bedrock-host"
 printf '==> %s: %s\n' "$APP" "$(du -sh "$APP" | cut -f 1)"

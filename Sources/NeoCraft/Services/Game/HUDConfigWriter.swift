@@ -531,7 +531,7 @@ extension HUDConfigWriter {
                 y: widget.y,
                 scale: widget.scale,
                 visible: widget.visible,
-                containerStyle: "applePill",
+                containerStyle: "neocraft",
                 fontStyle: widget.fontStyle.rawValue,
                 textStyle: "regular",
                 colorMode: "static",

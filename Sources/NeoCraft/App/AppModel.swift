@@ -88,6 +88,15 @@ final class AppModel {
     var serverSetupIDs: Set<UUID> = []
     /// Hosted server shown in the dashboard sheet.
     var dashboardServer: HostedServer?
+
+    /// Hosted servers visible in the UI right now — Bedrock servers
+    /// disappear entirely while the Bedrock-servers beta is off (folders
+    /// stay on disk; re-enabling brings them back).
+    var visibleHostedServers: [HostedServer] {
+        hostedServers.filter {
+            $0.edition == .java || settings.betaFeatures.bedrockServers
+        }
+    }
     /// Per-server console buffers for the dashboard's live log view.
     var serverConsoles: [UUID: [ConsoleEntry]] = [:]
     /// Player names seen joining/leaving in each server's console output.
@@ -195,6 +204,8 @@ final class AppModel {
     let modInstaller: ModInstaller
     let gameProcess: GameProcess
     let dedicatedServers: DedicatedServerService
+    /// Bedrock Dedicated Servers (bedrock_server.exe under Wine).
+    let bedrockServers: BedrockServerService
     let metrics: SystemMetricsProvider
 
     // MARK: - Private
@@ -212,6 +223,14 @@ final class AppModel {
     private var hudWatcherSource: (any DispatchSourceFileSystemObject)?
     private var hudWatchedConfigURL: URL?
     private var hudLastHandledModification: Date?
+    /// NeoCraft bridge (in-game companion mods): running instance, the
+    /// `commands/` dir watcher and the periodic `state.json` writer.
+    /// Internal (not private) so `NeoCraftBridge.swift` can reach them.
+    var bridgeInstance: GameInstance?
+    var bridgeWatcherSource: (any DispatchSourceFileSystemObject)?
+    var bridgeStateTask: Task<Void, Never>?
+    var bridgeWorldsCache: [WorldInfo]?
+    var bridgeWorldsCacheDate: Date?
     /// Per-server log files mirroring the dashboard console to disk.
     private var serverLogWriters: [UUID: GameLogWriter] = [:]
 
@@ -228,7 +247,8 @@ final class AppModel {
         self.modrinth = modrinth
         self.modInstaller = ModInstaller(modrinth: modrinth)
         self.gameProcess = GameProcess()
-        self.dedicatedServers = DedicatedServerService(versions: versions)
+        self.dedicatedServers = DedicatedServerService(versions: versions, fabric: fabric)
+        self.bedrockServers = BedrockServerService()
         self.metrics = SystemMetricsProvider()
 
         let store = Persistence.load()
@@ -348,6 +368,11 @@ final class AppModel {
                 self?.handleServerExit(id: id, status: status)
             }
         }
+        await bedrockServers.setExitHandler { [weak self] id, status in
+            Task { @MainActor in
+                self?.handleServerExit(id: id, status: status)
+            }
+        }
         await loadJavaRuntimes()
         async let catalogLoad: Void = reloadCatalog()
         async let patchNoteLoad: Void = loadPatchNotes()
@@ -355,9 +380,12 @@ final class AppModel {
         ensureDefaultInstance()
         selectionDidChange()
         StudioTheme.refreshBiomeAccent()
+        refreshBedrockContent()
         isBootstrapping = false
         // Servers flagged "Start with NeoCraft" boot after the UI is up.
+        // Bedrock servers wait for their own beta flag.
         for server in hostedServers where server.autoStart {
+            if server.edition == .bedrock, !settings.betaFeatures.bedrockServers { continue }
             startHostedServer(server)
         }
     }
@@ -1358,6 +1386,7 @@ final class AppModel {
         if settings.betaFeatures.inGameHUD {
             startHUDConfigWatcher(for: instance)
         }
+        startNeoCraftBridge(for: instance)
         finishActivity(activity, success: true, detail: "Minecraft is running")
 
         if let index = instances.firstIndex(where: { $0.id == instance.id }) {
@@ -1388,6 +1417,7 @@ final class AppModel {
         isGameRunning = false
         runningInstanceID = nil
         stopHUDConfigWatcher()
+        stopNeoCraftBridge()
         let duration = Date().timeIntervalSince(startedAt)
         launchStartedAt = nil
         currentLogWriter?.write("\n[NeoCraft] Minecraft exited with status \(status).\n")
@@ -1591,6 +1621,25 @@ final class AppModel {
         hostedServers = HostedServerStore.discover()
     }
 
+    // MARK: - Bedrock content sync
+
+    /// Worlds, packs and screenshots found in NeoCraft Bedrock's Wine
+    /// prefixes — the same folders the launcher manages, so both apps
+    /// always show the same content.
+    private(set) var bedrockContent = BedrockContent.Snapshot()
+
+    /// Rescans the Bedrock prefixes. Directory listings only — safe to
+    /// call whenever a synced view appears. Skipped entirely while the
+    /// Bedrock beta is off so nothing Bedrock-related leaks into the UI
+    /// (and no filesystem scan runs for a hidden feature).
+    func refreshBedrockContent() {
+        guard settings.betaFeatures.bedrockEdition else {
+            if !bedrockContent.isEmpty { bedrockContent = BedrockContent.Snapshot() }
+            return
+        }
+        bedrockContent = BedrockContent.snapshot()
+    }
+
     /// Packages a single-player world as a Java dedicated server: downloads
     /// Mojang's server jar for the instance's version, copies the save and
     /// writes eula.txt/server.properties into a fresh server folder.
@@ -1625,6 +1674,130 @@ final class AppModel {
             port: port,
             onlineMode: onlineMode
         )
+        enqueueServerSetup(server, instance: instance)
+    }
+
+    /// Creates a standalone Java dedicated server from the Servers tab:
+    /// a fresh world the server generates on first boot, or a copy of a
+    /// world from a Java instance. `instance`/`worldName` nil/empty means
+    /// "new world".
+    func createJavaServer(
+        name: String,
+        minecraftVersion: String,
+        serverType: ServerType,
+        port: Int,
+        onlineMode: Bool,
+        instance: GameInstance?,
+        worldName: String,
+        group: String = "",
+        preset: ServerPreset = .custom
+    ) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        guard (1...65535).contains(port) else {
+            alert = AppAlert(title: "Invalid port", message: "The server port must be between 1 and 65535.")
+            return
+        }
+        let sourceWorld = worldName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var owner = instance
+        if !sourceWorld.isEmpty {
+            guard let instance, instance.edition == .java else {
+                alert = AppAlert(title: "No Java instance", message: "Pick a Java instance and one of its worlds, or choose “New world”.")
+                return
+            }
+            owner = instance
+        } else {
+            owner = nil
+        }
+
+        let server = HostedServer(
+            serverType: serverType,
+            name: trimmedName,
+            instanceID: owner?.id ?? UUID(),
+            instanceName: owner?.name ?? "Standalone",
+            minecraftVersion: minecraftVersion,
+            worldName: sourceWorld.isEmpty ? "world" : sourceWorld,
+            sourceWorldName: sourceWorld,
+            port: port,
+            onlineMode: onlineMode,
+            group: group.trimmingCharacters(in: .whitespacesAndNewlines),
+            preset: preset.rawValue
+        )
+        enqueueServerSetup(server, instance: owner)
+    }
+
+    /// Creates a Bedrock Dedicated Server: downloads Mojang's Windows BDS
+    /// build ("latest" or a pinned version) for the `bedrock-host` helper.
+    func createBedrockServer(
+        name: String,
+        bedrockVersion: String,
+        port: Int,
+        onlineMode: Bool,
+        levelName: String,
+        group: String = "",
+        preset: ServerPreset = .custom
+    ) {
+        guard settings.betaFeatures.bedrockServers else {
+            alert = AppAlert(
+                title: "Bedrock servers beta",
+                message: "Bedrock server hosting is a beta feature — enable it in Settings → Beta Features."
+            )
+            return
+        }
+        guard bedrockSystemSupported else {
+            presentBedrockSystemUnsupported()
+            return
+        }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        guard (1...65535).contains(port) else {
+            alert = AppAlert(title: "Invalid port", message: "The server port must be between 1 and 65535.")
+            return
+        }
+        let level = levelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let server = HostedServer(
+            edition: .bedrock,
+            name: trimmedName,
+            instanceID: UUID(),
+            instanceName: "Bedrock",
+            minecraftVersion: bedrockVersion.isEmpty ? "latest" : bedrockVersion,
+            worldName: level.isEmpty ? "world" : level,
+            sourceWorldName: "",
+            port: port,
+            onlineMode: onlineMode,
+            group: group.trimmingCharacters(in: .whitespacesAndNewlines),
+            preset: preset.rawValue
+        )
+        hostedServers.insert(server, at: 0)
+        serverSetupIDs.insert(server.id)
+        let activity = beginActivity("Setting up \(server.name)", detail: "Preparing Bedrock Dedicated Server…")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.serverSetupIDs.remove(server.id) }
+            do {
+                try await self.bedrockServers.create(server: server, preview: false) { update in
+                    Task { @MainActor in
+                        self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
+                    }
+                }
+                // `create` may have resolved "latest" to a pinned version.
+                self.hostedServers = HostedServerStore.discover()
+                self.finishActivity(activity, success: true, detail: "Ready — press Start to open it to players")
+                self.showToast("\(server.name) is ready to host")
+                SoundManager.shared.play(.chime)
+                self.refreshStorageUsage()
+            } catch {
+                self.hostedServers.removeAll { $0.id == server.id }
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't set up \(server.name)", error)
+            }
+        }
+    }
+
+    /// Shared setup pipeline for Java hosted servers: resolves Java,
+    /// downloads the server software, copies the world when present and
+    /// writes the managed configuration.
+    private func enqueueServerSetup(_ server: HostedServer, instance: GameInstance?) {
         hostedServers.insert(server, at: 0)
         serverSetupIDs.insert(server.id)
         let activity = beginActivity("Setting up \(server.name)", detail: "Preparing dedicated server…")
@@ -1632,7 +1805,16 @@ final class AppModel {
             guard let self else { return }
             defer { self.serverSetupIDs.remove(server.id) }
             do {
-                try await self.dedicatedServers.create(server: server, instance: instance) { update in
+                let details = try await self.versions.details(for: server.minecraftVersion)
+                let runtime = try await self.resolveJava(
+                    requiredMajor: details.requiredJavaMajor,
+                    preferredJavaPath: instance?.javaPath
+                ) { update in
+                    Task { @MainActor in
+                        self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
+                    }
+                }
+                try await self.dedicatedServers.create(server: server, instance: instance, java: runtime) { update in
                     Task { @MainActor in
                         self.updateActivity(activity, fraction: update.fraction, detail: update.detail)
                     }
@@ -1656,9 +1838,14 @@ final class AppModel {
 
     /// Boots the dedicated server with the owning instance's Java preference
     /// (falling back to the global Java setting) and its memory profile.
+    /// Bedrock servers go through the `bedrock-host` Wine helper instead.
     func startHostedServer(_ server: HostedServer) {
         guard !runningServerIDs.contains(server.id),
               !serverSetupIDs.contains(server.id) else { return }
+        if server.edition == .bedrock {
+            startBedrockServer(server)
+            return
+        }
         runningServerIDs.insert(server.id)
         readyServerIDs.remove(server.id)
         let activity = beginActivity("Starting \(server.name)", detail: "Launching dedicated server…")
@@ -1725,12 +1912,111 @@ final class AppModel {
         }
     }
 
+    /// Boots a Bedrock Dedicated Server through the bundled NeoCraft
+    /// Bedrock component's `bedrock-host` helper (Wine, headless).
+    private func startBedrockServer(_ server: HostedServer) {
+        guard let helper = Self.bedrockHostHelper else {
+            alert = AppAlert(
+                title: "NeoCraft Bedrock missing",
+                message: "This NeoCraft build doesn't include the Bedrock server runner. Rebuild NeoCraft Bedrock (scripts/build.sh), then rebuild NeoCraft."
+            )
+            return
+        }
+        guard bedrockSystemSupported else {
+            presentBedrockSystemUnsupported()
+            return
+        }
+        // The helper needs the launcher's installed Wine engine.
+        guard FileManager.default.fileExists(
+            atPath: (Self.bedrockDataDirectory.appendingPathComponent("library.json")).path
+        ) else {
+            alert = AppAlert(
+                title: "Engine missing",
+                message: "No NeoCraft Bedrock engine is installed — open NeoCraft Bedrock once to finish setup."
+            )
+            return
+        }
+        runningServerIDs.insert(server.id)
+        readyServerIDs.remove(server.id)
+        let activity = beginActivity("Starting \(server.name)", detail: "Launching Bedrock Dedicated Server…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let logURL = AppPaths.logs.appendingPathComponent(
+                    "server-\(server.name.replacingOccurrences(of: "/", with: "-"))-\(Int(Date().timeIntervalSince1970)).log",
+                    isDirectory: false
+                )
+                let writer = try? GameLogWriter(url: logURL)
+                self.serverLogWriters[server.id] = writer
+                writer?.write("NeoCraft \(AppConstants.version) · Bedrock dedicated server · \(server.minecraftVersion)\n")
+                writer?.write("Address: \(Self.serverAddress(server))\n\n")
+                _ = try await self.bedrockServers.start(
+                    server: server,
+                    helper: helper,
+                    dataDirectory: Self.bedrockDataDirectory
+                ) { text, level in
+                    Task { @MainActor in
+                        self.appendServerOutput(server.id, text: text, level: level)
+                        writer?.write(text)
+                        // BDS announces readiness with "Server started.".
+                        if text.contains("Server started") {
+                            self.readyServerIDs.insert(server.id)
+                            self.updateActivity(
+                                activity,
+                                fraction: 1,
+                                detail: "Online at \(Self.serverAddress(server))"
+                            )
+                        }
+                    }
+                }
+                self.serverStartedAt[server.id] = Date()
+                self.finishActivity(
+                    activity,
+                    success: true,
+                    detail: "Running at \(Self.serverAddress(server))"
+                )
+                self.showToast("\(server.name) is running — join at \(Self.serverAddress(server))")
+                if self.settings.openConsoleOnLaunch {
+                    self.showConsole = true
+                }
+            } catch {
+                self.runningServerIDs.remove(server.id)
+                self.readyServerIDs.remove(server.id)
+                self.serverStartedAt[server.id] = nil
+                self.serverLogWriters[server.id]?.close()
+                self.serverLogWriters[server.id] = nil
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't start \(server.name)", error)
+            }
+        }
+    }
+
+    /// `bedrock-host` inside the bundled NeoCraft Bedrock.app — the only
+    /// Bedrock runtime NeoCraft uses, same as the game launcher.
+    private static var bedrockHostHelper: URL? {
+        guard let app = bundledBedrockApp else { return nil }
+        let helper = app.appendingPathComponent("Contents/Helpers/bedrock-host")
+        return FileManager.default.fileExists(atPath: helper.path) ? helper : nil
+    }
+
+    /// The NeoCraft Bedrock component's data directory — where its
+    /// installed Wine engine lives for the host helper.
+    private static var bedrockDataDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!
+            .appendingPathComponent("NeoCraft Bedrock", isDirectory: true)
+    }
+
     /// Sends `stop` to the server so it saves its world before exiting.
     func stopHostedServer(_ server: HostedServer) {
         guard runningServerIDs.contains(server.id) else { return }
         appendConsole("Stopping server \(server.name)…", level: .warning)
         Task { [weak self] in
-            await self?.dedicatedServers.stop(server.id)
+            if server.edition == .bedrock {
+                await self?.bedrockServers.stop(server.id)
+            } else {
+                await self?.dedicatedServers.stop(server.id)
+            }
             self?.runningServerIDs.remove(server.id)
             self?.readyServerIDs.remove(server.id)
         }
@@ -1744,7 +2030,11 @@ final class AppModel {
         }
         Task { [weak self] in
             guard let self else { return }
-            await self.dedicatedServers.stop(server.id)
+            if server.edition == .bedrock {
+                await self.bedrockServers.stop(server.id)
+            } else {
+                await self.dedicatedServers.stop(server.id)
+            }
             self.runningServerIDs.remove(server.id)
             self.readyServerIDs.remove(server.id)
             self.startHostedServer(server)
@@ -1757,7 +2047,11 @@ final class AppModel {
         guard !trimmed.isEmpty, runningServerIDs.contains(server.id) else { return }
         appendServerLine(server.id, "> \(trimmed)", level: .info)
         Task {
-            await dedicatedServers.sendCommand(server.id, trimmed)
+            if server.edition == .bedrock {
+                await bedrockServers.sendCommand(server.id, trimmed)
+            } else {
+                await dedicatedServers.sendCommand(server.id, trimmed)
+            }
         }
     }
 
@@ -1767,7 +2061,10 @@ final class AppModel {
 
     /// Reads the server's current `server.properties` for the dashboard form.
     func serverProperties(for server: HostedServer) async -> [String: String] {
-        await dedicatedServers.properties(for: server)
+        if server.edition == .bedrock {
+            return await bedrockServers.properties(for: server)
+        }
+        return await dedicatedServers.properties(for: server)
     }
 
     /// Writes dashboard edits back to `server.properties` (server must be
@@ -1776,7 +2073,11 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.dedicatedServers.updateProperties(server, values: values)
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.updateProperties(server, values: values)
+                } else {
+                    try await self.dedicatedServers.updateProperties(server, values: values)
+                }
                 // Keep the launcher's address/join metadata in sync when the
                 // dashboard edits the port.
                 if let portText = values["server-port"],
@@ -1798,9 +2099,176 @@ final class AppModel {
         }
     }
 
+    // MARK: - Server world export / import
+
+    /// Zips the hosted world(s) to `destination` — Java exports the
+    /// single world folder, Bedrock the whole `worlds/` directory.
+    func exportServerWorld(_ server: HostedServer, to destination: URL) {
+        let activity = beginActivity("Exporting \(server.name)", detail: "Zipping world…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.exportWorldZip(server: server, to: destination)
+                } else {
+                    try await self.dedicatedServers.exportWorldZip(server: server, to: destination)
+                }
+                self.finishActivity(activity, success: true, detail: "World exported")
+                self.showToast("World exported")
+                self.reveal(destination.deletingLastPathComponent())
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't export world", error)
+            }
+        }
+    }
+
+    /// Replaces the hosted world(s) with the world folder inside `archive`.
+    /// The previous world is parked in `backups/` first. Server must be
+    /// stopped.
+    func importServerWorld(_ server: HostedServer, from archive: URL) {
+        guard !runningServerIDs.contains(server.id) else {
+            showToast("Stop the server before importing a world")
+            return
+        }
+        let activity = beginActivity("Importing \(server.name)", detail: "Unzipping world…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.importWorldZip(server: server, from: archive)
+                } else {
+                    try await self.dedicatedServers.importWorldZip(server: server, from: archive)
+                }
+                self.finishActivity(activity, success: true, detail: "World imported — start the server to play")
+                self.showToast("World imported")
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't import world", error)
+            }
+        }
+    }
+
+    // MARK: - Server software updates
+
+    /// What an update would change, or nil when already current / unknown.
+    struct ServerUpdateInfo: Sendable {
+        let title: String
+        let detail: String
+    }
+
+    /// Checks whether newer server software exists for this hosted server.
+    /// Vanilla compares against Mojang's latest release, Paper against the
+    /// newest build for its version, Bedrock against the BDS download API.
+    /// Fabric servers report no check (loader updates are rare and manual).
+    func checkServerUpdate(_ server: HostedServer) async -> ServerUpdateInfo? {
+        switch (server.edition, server.serverType) {
+        case (.java, .vanilla):
+            guard let manifest = try? await versions.manifest(),
+                  manifest.latest.release != server.minecraftVersion else { return nil }
+            return ServerUpdateInfo(
+                title: "Minecraft \(manifest.latest.release)",
+                detail: "Latest release — your server runs \(server.minecraftVersion). Updating downloads the new server.jar."
+            )
+        case (.java, .paper):
+            guard let build = try? await PaperService.latestBuild(for: server.minecraftVersion) else { return nil }
+            return ServerUpdateInfo(
+                title: "Paper build \(build.build)",
+                detail: "Newest PaperMC build for \(server.minecraftVersion). Updating replaces server.jar."
+            )
+        case (.bedrock, _):
+            guard server.minecraftVersion != "latest",
+                  let url = try? await BedrockServerDownload.latestURL(preview: false),
+                  let version = Self.bdsVersion(from: url),
+                  version != server.minecraftVersion else { return nil }
+            return ServerUpdateInfo(
+                title: "BDS \(version)",
+                detail: "Newest Bedrock Dedicated Server — your server runs \(server.minecraftVersion). Updating re-downloads the Windows build."
+            )
+        default:
+            return nil
+        }
+    }
+
+    /// Extracts `1.26.63.1` from a `bedrock-server-<version>.zip` URL.
+    private static func bdsVersion(from url: URL) -> String? {
+        let name = url.lastPathComponent
+        guard name.hasPrefix("bedrock-server-"), name.hasSuffix(".zip") else { return nil }
+        return String(name.dropFirst("bedrock-server-".count).dropLast(4))
+    }
+
+    /// Applies the pending update: vanilla downloads Mojang's server.jar
+    /// for the latest release (and bumps the recorded version), Paper
+    /// downloads the newest build, Bedrock re-downloads BDS. Fabric has
+    /// no updater — returns false.
+    @discardableResult
+    func applyServerUpdate(_ server: HostedServer) async -> Bool {
+        guard !runningServerIDs.contains(server.id) else {
+            showToast("Stop the server before updating")
+            return false
+        }
+        let activity = beginActivity("Updating \(server.name)", detail: "Downloading server software…")
+        do {
+            switch (server.edition, server.serverType) {
+            case (.java, .vanilla):
+                let manifest = try await versions.manifest()
+                guard let details = try? await versions.details(for: manifest.latest.release),
+                      let jar = details.downloads?["server"]?.url,
+                      let jarURL = URL(string: jar) else {
+                    throw NetworkError.transport("Couldn't resolve the latest server.jar")
+                }
+                let destination = server.serverJar
+                try await Downloader.download(DownloadRequest(
+                    url: jarURL, destination: destination, label: "server.jar")) { _ in }
+                var updated = server
+                updated.minecraftVersion = manifest.latest.release
+                try HostedServerStore.save(updated)
+                replaceServerInLists(updated)
+            case (.java, .paper):
+                let build = try await PaperService.latestBuild(for: server.minecraftVersion)
+                let destination = server.serverJar
+                try await Downloader.download(DownloadRequest(
+                    url: build.url, destination: destination, label: "paper-\(build.build).jar")) { _ in }
+            case (.bedrock, _):
+                let zipURL = try await BedrockServerDownload.latestURL(preview: false)
+                try await bedrockServers.updateSoftware(server: server, zipURL: zipURL) { _ in }
+                var updated = server
+                if let version = Self.bdsVersion(from: zipURL) {
+                    updated.minecraftVersion = version
+                    try HostedServerStore.save(updated)
+                    replaceServerInLists(updated)
+                }
+            default:
+                finishActivity(activity, success: false, detail: "No updater for this server type")
+                return false
+            }
+            finishActivity(activity, success: true, detail: "Update installed — restart to use it")
+            showToast("\(server.name) updated")
+            return true
+        } catch {
+            finishActivity(activity, success: false, detail: error.localizedDescription)
+            presentError("Couldn't update server", error)
+            return false
+        }
+    }
+
+    private func replaceServerInLists(_ updated: HostedServer) {
+        if let index = hostedServers.firstIndex(where: { $0.id == updated.id }) {
+            hostedServers[index] = updated
+        }
+        if dashboardServer?.id == updated.id {
+            dashboardServer = updated
+        }
+    }
+
     /// Re-copies the single-player save over the hosted world — use after
     /// playing more in single player. Only while the server is stopped.
+    /// Java servers only — Bedrock worlds sync through the launcher.
     func syncHostedServerWorld(_ server: HostedServer) {
+        guard server.edition == .java else {
+            showToast("Bedrock worlds can't be re-synced from a Java instance")
+            return
+        }
         guard let instance = instance(for: server.instanceID) else {
             showToast("The original instance is gone — the world can't be re-synced")
             return
@@ -1828,7 +2296,11 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             if self.runningServerIDs.contains(server.id) {
-                await self.dedicatedServers.stop(server.id)
+                if server.edition == .bedrock {
+                    await self.bedrockServers.stop(server.id)
+                } else {
+                    await self.dedicatedServers.stop(server.id)
+                }
                 self.runningServerIDs.remove(server.id)
                 self.readyServerIDs.remove(server.id)
             }
@@ -1851,9 +2323,16 @@ final class AppModel {
     }
 
     /// Quick-joins a running hosted server through the owning instance.
+    /// Bedrock has no quick-play — its clients join through the game's
+    /// own server list, so only the address is copied for them.
     func joinHostedServer(_ server: HostedServer) {
         guard runningServerIDs.contains(server.id) else {
             showToast("Start the server first")
+            return
+        }
+        guard server.edition == .java else {
+            copyServerAddress(server)
+            showToast("Bedrock address copied — add it in Minecraft's server list")
             return
         }
         guard let instance = instance(for: server.instanceID)
@@ -1872,7 +2351,7 @@ final class AppModel {
     /// Opens the Server Dashboard page with `server` selected.
     func openServerDashboard(_ server: HostedServer) {
         dashboardServer = server
-        go(to: .dashboard)
+        go(to: .servers)
     }
 
     /// Persists the per-server "Start with NeoCraft" flag.
@@ -1894,24 +2373,69 @@ final class AppModel {
         showToast(enabled ? "\(server.name) starts with NeoCraft" : "\(server.name) won't auto-start")
     }
 
+    /// Persists launcher-side metadata (group label, accent colour,
+    /// creation preset) without touching the server folder.
+    func updateServerMeta(_ server: HostedServer, group: String? = nil, colorHex: String? = nil, preset: String? = nil) {
+        var updated = server
+        if let group { updated.group = group.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let colorHex { updated.colorHex = colorHex }
+        if let preset { updated.preset = preset }
+        do {
+            try HostedServerStore.save(updated)
+        } catch {
+            presentError("Couldn't save server settings", error)
+            return
+        }
+        if let index = hostedServers.firstIndex(where: { $0.id == server.id }) {
+            hostedServers[index] = updated
+        }
+        if dashboardServer?.id == server.id {
+            dashboardServer = updated
+        }
+    }
+
+    /// Writes a preset's `server.properties` keys over the current file —
+    /// the server must be stopped so it doesn't rewrite them on shutdown.
+    func applyServerPreset(_ server: HostedServer, _ preset: ServerPreset) {
+        guard preset != .custom else { return }
+        guard !runningServerIDs.contains(server.id) else {
+            showToast("Stop the server before applying a preset")
+            return
+        }
+        let values = server.edition == .bedrock ? preset.bedrockProperties : preset.properties
+        guard !values.isEmpty else { return }
+        updateServerMeta(server, preset: preset.rawValue)
+        updateServerProperties(server, values: values)
+    }
+
     // MARK: - Dashboard file browser & world backups
 
     /// Immediate children of `directory` inside the server folder.
     func serverFiles(for server: HostedServer, in directory: URL? = nil) async -> [ServerFileEntry] {
         let target = directory ?? server.directory
+        if server.edition == .bedrock {
+            return (try? await bedrockServers.files(in: target, for: server)) ?? []
+        }
         return (try? await dedicatedServers.files(in: target, for: server)) ?? []
     }
 
     /// Text preview of a file inside the server folder (nil = binary/too big).
     func serverFileText(_ url: URL, for server: HostedServer) async -> String? {
-        await dedicatedServers.readTextFile(url, for: server)
+        if server.edition == .bedrock {
+            return await bedrockServers.readTextFile(url, for: server)
+        }
+        return await dedicatedServers.readTextFile(url, for: server)
     }
 
     func deleteServerFile(_ url: URL, for server: HostedServer) {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.dedicatedServers.deleteFile(url, for: server)
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.deleteFile(url, for: server)
+                } else {
+                    try await self.dedicatedServers.deleteFile(url, for: server)
+                }
                 self.showToast("Deleted \(url.lastPathComponent)")
             } catch {
                 self.presentError("Couldn't delete \(url.lastPathComponent)", error)
@@ -1921,7 +2445,10 @@ final class AppModel {
 
     /// World snapshots inside `server.backupsDirectory`, newest first.
     func serverBackups(for server: HostedServer) async -> [URL] {
-        await dedicatedServers.backups(for: server)
+        if server.edition == .bedrock {
+            return await bedrockServers.backups(for: server)
+        }
+        return await dedicatedServers.backups(for: server)
     }
 
     /// Copies the hosted world into `backups/` — server must be stopped.
@@ -1930,7 +2457,11 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.dedicatedServers.backupWorld(server: server)
+                if server.edition == .bedrock {
+                    _ = try await self.bedrockServers.backupWorld(server: server)
+                } else {
+                    _ = try await self.dedicatedServers.backupWorld(server: server)
+                }
                 self.finishActivity(activity, success: true, detail: "Backup created")
                 self.showToast("World backup created")
             } catch {
@@ -1946,7 +2477,11 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.dedicatedServers.restoreBackup(server: server, backup: backup)
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.restoreBackup(server: server, backup: backup)
+                } else {
+                    try await self.dedicatedServers.restoreBackup(server: server, backup: backup)
+                }
                 self.finishActivity(activity, success: true, detail: "World restored")
                 self.showToast("World restored from backup")
             } catch {
@@ -1960,10 +2495,125 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.dedicatedServers.deleteBackup(backup, for: server)
+                if server.edition == .bedrock {
+                    try await self.bedrockServers.deleteBackup(backup, for: server)
+                } else {
+                    try await self.dedicatedServers.deleteBackup(backup, for: server)
+                }
                 self.showToast("Backup deleted")
             } catch {
                 self.presentError("Couldn't delete backup", error)
+            }
+        }
+    }
+
+    // MARK: - Server plugins & mods
+
+    /// Installed plugin/mod jars of a Java server (`plugins/` for Paper,
+    /// `mods/` for Fabric), for the dashboard's extension list.
+    func serverExtensions(for server: HostedServer) async -> [ServerFileEntry] {
+        guard server.edition == .java else { return [] }
+        return await dedicatedServers.extensions(for: server)
+    }
+
+    /// Installs a plugin/mod jar downloaded from a URL (Modrinth file or a
+    /// direct link the user pasted).
+    func installServerExtension(from url: URL, filename: String?, for server: HostedServer) {
+        guard server.edition == .java else { return }
+        guard runningServerIDs.contains(server.id) == false else {
+            showToast("Stop the server before changing its plugins")
+            return
+        }
+        let activity = beginActivity("Installing extension", detail: filename ?? url.lastPathComponent)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                if url.isFileURL {
+                    _ = try await self.dedicatedServers.installExtension(
+                        from: url, filename: filename, for: server
+                    )
+                } else {
+                    _ = try await self.dedicatedServers.installExtension(
+                        from: url, filename: filename, for: server
+                    ) { fraction in
+                        Task { @MainActor in
+                            self.updateActivity(activity, fraction: fraction * 0.9, detail: "Downloading…")
+                        }
+                    }
+                }
+                self.finishActivity(activity, success: true, detail: "Installed — restart the server to load it")
+                self.showToast("Installed \(filename ?? url.lastPathComponent)")
+            } catch {
+                self.finishActivity(activity, success: false, detail: error.localizedDescription)
+                self.presentError("Couldn't install extension", error)
+            }
+        }
+    }
+
+    /// Installs an extension from a local file — jar for Paper/Fabric,
+    /// zip/mcpack/jar resource pack for vanilla.
+    func installServerExtension(fromFile file: URL, for server: HostedServer) {
+        let ext = "." + file.pathExtension.lowercased()
+        guard server.serverType.extensionSuffixes.contains(ext) else {
+            let expected = server.serverType.extensionSuffixes.joined(separator: ", ")
+            showToast("A \(server.serverType.title) server only takes \(expected) files")
+            return
+        }
+        installServerExtension(from: file, filename: file.lastPathComponent, for: server)
+    }
+
+    /// Searches Modrinth for plugins (Paper/Spigot/Bukkit) or mods (Fabric)
+    /// matching the server's Minecraft version.
+    func searchServerExtensions(
+        query: String,
+        for server: HostedServer,
+        offset: Int = 0
+    ) async throws -> ModrinthSearchResponse {
+        let (type, loader): (ModrinthProjectType, String) =
+            switch server.serverType {
+            case .paper: (.plugin, "paper")
+            case .fabric: (.mod, "fabric")
+            case .vanilla: (.resourcepack, "")
+            }
+        return try await modrinth.search(
+            query: query,
+            type: type,
+            gameVersion: server.minecraftVersion,
+            loader: loader,
+            sort: .relevance,
+            offset: offset
+        )
+    }
+
+    /// Downloads the primary file of a Modrinth version into the server's
+    /// extension folder.
+    func installServerExtension(version: ModrinthVersion, for server: HostedServer) {
+        guard let file = version.primaryFile, let url = URL(string: file.url) else {
+            showToast("That version has no downloadable file")
+            return
+        }
+        installServerExtension(from: url, filename: file.filename, for: server)
+    }
+
+    func setServerExtensionEnabled(_ entry: ServerFileEntry, enabled: Bool, for server: HostedServer) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.setExtensionEnabled(entry, enabled: enabled, for: server)
+            } catch {
+                self.presentError("Couldn't update extension", error)
+            }
+        }
+    }
+
+    func deleteServerExtension(_ entry: ServerFileEntry, for server: HostedServer) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.dedicatedServers.deleteExtension(entry, for: server)
+                self.showToast("Deleted \(entry.name)")
+            } catch {
+                self.presentError("Couldn't delete extension", error)
             }
         }
     }
@@ -2579,6 +3229,39 @@ final class AppModel {
 
     /// Ensures the lightweight HUD mod stack is present, then writes the
     /// editor layout into the instance's config directory.
+    /// Writes the Studio "In-Game UI" theme to the selected Fabric
+    /// instance's `config/neocraft_ui.json`. The `neocraft-ui` mod
+    /// hot-reloads the file, so changes apply without a restart.
+    func applyUIThemeToInstance(_ instance: GameInstance? = nil) {
+        guard let instance = instance ?? selectedInstance else {
+            alert = AppAlert(title: "No instance selected", message: "Choose an instance before applying the UI theme.")
+            return
+        }
+        guard settings.betaFeatures.inGameUI else {
+            alert = AppAlert(
+                title: "Beta feature",
+                message: "The in-game UI theme is a beta feature. Enable it in Settings → Beta Features first."
+            )
+            return
+        }
+        guard instance.loader == .fabric else {
+            alert = AppAlert(
+                title: "Fabric required",
+                message: "The UI theme mod is a Fabric mod. Switch this instance to Fabric first."
+            )
+            return
+        }
+        do {
+            _ = try UIConfigWriter.write(settings.uiTheme, launcher: settings, to: instance)
+            installCompanionMods(into: instance)
+            showToast("UI theme applied to \(instance.name)")
+            SoundManager.shared.play(.chime)
+            appendConsole("NeoCraft UI theme written for \(instance.name)", level: .info)
+        } catch {
+            presentError("Couldn't apply UI theme", error)
+        }
+    }
+
     func applyHUDToInstance(_ instance: GameInstance? = nil) {
         guard settings.betaFeatures.inGameHUD else {
             alert = AppAlert(
@@ -2639,8 +3322,8 @@ final class AppModel {
                     to: instance
                 ))
 
-                // 3. Drop the bundled neocraft-hud.jar companion mod in.
-                self.installCompanionHUDMod(into: instance)
+                // 3. Drop the bundled companion mod jars in.
+                self.installCompanionMods(into: instance)
 
                 self.refreshStats(for: instance)
                 self.refreshInstalledProjects()
@@ -2657,15 +3340,31 @@ final class AppModel {
         }
     }
 
-    /// Copies the bundled `neocraft-hud.jar` companion mod into the
-    /// instance's mods folder so the Studio layout renders in-game.
+    /// Companion mod jars shipped with every NeoCraft Fabric instance.
+    /// All in-game features — UI theme/menu, HUD editor and host panel —
+    /// are beta and install together only while the flag is on.
+    private static let betaCompanionModJars = [
+        "neocraft-ui", "neocraft-hud", "neocraft-host",
+    ]
+    private static let companionModJars = betaCompanionModJars
+
+    /// Copies the bundled companion mod jars into the instance's mods
+    /// folder — only while the beta feature is enabled.
     /// Idempotent — safe to call on every launch and every save.
-    private func installCompanionHUDMod(into instance: GameInstance) {
-        guard let bundled = Bundle.main.url(forResource: "neocraft-hud", withExtension: "jar", subdirectory: "Mods")
-                ?? Bundle.main.url(forResource: "neocraft-hud", withExtension: "jar")
-                ?? Bundle.main.resourceURL?.appendingPathComponent("Mods/neocraft-hud.jar") else { return }
+    private func installCompanionMods(into instance: GameInstance) {
         let modsDir = instance.gameDirectory.appendingPathComponent("mods", isDirectory: true)
-        let dest = modsDir.appendingPathComponent("neocraft-hud.jar")
+        if settings.betaFeatures.inGameHUD {
+            for jar in Self.betaCompanionModJars {
+                installCompanionJar(jar, into: instance, modsDir: modsDir)
+            }
+        }
+    }
+
+    private func installCompanionJar(_ jar: String, into instance: GameInstance, modsDir: URL) {
+        guard let bundled = Bundle.main.url(forResource: jar, withExtension: "jar", subdirectory: "Mods")
+                ?? Bundle.main.url(forResource: jar, withExtension: "jar")
+                ?? Bundle.main.resourceURL?.appendingPathComponent("Mods/\(jar).jar") else { return }
+        let dest = modsDir.appendingPathComponent("\(jar).jar")
         do {
             try FileManager.default.createDirectory(at: modsDir, withIntermediateDirectories: true)
             // Skip the copy when the bundled jar is already in place —
@@ -2679,9 +3378,9 @@ final class AppModel {
                 try FileManager.default.removeItem(at: dest)
             }
             try FileManager.default.copyItem(at: bundled, to: dest)
-            appendConsole("Installed companion HUD mod into \(instance.name)", level: .info)
+            appendConsole("Installed companion mod \(jar).jar into \(instance.name)", level: .info)
         } catch {
-            appendConsole("Couldn't install neocraft-hud.jar: \(error.localizedDescription)", level: .warning)
+            appendConsole("Couldn't install \(jar).jar: \(error.localizedDescription)", level: .warning)
         }
     }
 
@@ -2743,30 +3442,36 @@ final class AppModel {
 
     /// Everything a Fabric instance needs at runtime beyond the game
     /// files themselves: a compatible `fabric-api` from Modrinth (skipped
-    /// when current) and — only while the beta feature is on — the bundled
-    /// `neocraft-hud.jar` companion mod. Called on instance save and
-    /// before every launch — both steps are idempotent and cheap when
-    /// everything is already installed.
+    /// when current) and — only while the beta feature is on — the
+    /// `neocraft-ui`/`neocraft-hud`/`neocraft-host` jars plus the synced
+    /// `neocraft_ui.json`/`neocraft_hud.json` configs. Called on instance
+    /// save and before every launch — all steps are idempotent and cheap
+    /// when everything is already installed.
     private func ensureFabricRuntimeMods(for instance: GameInstance) async {
         guard instance.loader == .fabric else { return }
-        if settings.betaFeatures.inGameHUD {
-            installCompanionHUDMod(into: instance)
+        installCompanionMods(into: instance)
+        if settings.betaFeatures.inGameUI {
+            // Keep the NeoCraft UI theme in sync with Studio on every
+            // launch — the mod hot-reloads the file anyway.
+            UIConfigWriter.writeQuietly(settings.uiTheme, launcher: settings, to: instance)
         }
         await modInstaller.ensureFabricAPI(for: instance)
     }
 
-    /// Removes the companion HUD mod and the NeoCraft-written HUD config
-    /// files from every instance. Called when the beta toggle is switched
-    /// off so no stale jar keeps rendering an old layout in-game.
-    /// `config/minihud.json` is left alone — it may belong to a
-    /// user-installed MiniHUD.
+    /// Removes the beta companion mods (`neocraft-ui`, `neocraft-hud`,
+    /// `neocraft-host`) and the NeoCraft-written config files from every
+    /// instance. Called when the beta toggle is switched off so no stale
+    /// jar keeps rendering an old layout in-game. `config/minihud.json`
+    /// is left alone — it may belong to a user-installed MiniHUD.
+    /// `config/neocraft_ui.json` is removed too — the in-game UI is part
+    /// of the same beta feature.
     func disableInGameHUD() {
         stopHUDConfigWatcher()
         var removed = 0
         for instance in instances {
             removed += removeCompanionHUDMod(from: instance) ? 1 : 0
             let configRoot = instance.gameDirectory.appendingPathComponent("config", isDirectory: true)
-            for name in ["neocraft_hud.json"] {
+            for name in ["neocraft_hud.json", "neocraft_ui.json"] {
                 let url = configRoot.appendingPathComponent(name)
                 if FileManager.default.fileExists(atPath: url.path) {
                     try? FileManager.default.removeItem(at: url)
@@ -2777,26 +3482,30 @@ final class AppModel {
                 try? FileManager.default.removeItem(at: legacy)
             }
         }
-        appendConsole("In-Game HUD beta disabled — companion mod removed from \(removed) instance(s)", level: .info)
+        appendConsole("In-Game HUD beta disabled — companion mods removed from \(removed) instance(s)", level: .info)
         showToast("In-Game HUD disabled")
     }
 
-    /// Deletes `mods/neocraft-hud.jar` from an instance. Returns true when
-    /// a file was actually removed.
+    /// Deletes the beta companion mod jars (`neocraft-ui`,
+    /// `neocraft-hud`, `neocraft-host`) from an instance.
+    /// Returns true when at least one file was actually removed.
     @discardableResult
     private func removeCompanionHUDMod(from instance: GameInstance) -> Bool {
-        let dest = instance.gameDirectory
-            .appendingPathComponent("mods", isDirectory: true)
-            .appendingPathComponent("neocraft-hud.jar")
-        guard FileManager.default.fileExists(atPath: dest.path) else { return false }
-        do {
-            try FileManager.default.removeItem(at: dest)
-            appendConsole("Removed companion HUD mod from \(instance.name)", level: .info)
-            return true
-        } catch {
-            appendConsole("Couldn't remove neocraft-hud.jar from \(instance.name): \(error.localizedDescription)", level: .warning)
-            return false
+        var removed = false
+        for jar in Self.betaCompanionModJars {
+            let dest = instance.gameDirectory
+                .appendingPathComponent("mods", isDirectory: true)
+                .appendingPathComponent("\(jar).jar")
+            guard FileManager.default.fileExists(atPath: dest.path) else { continue }
+            do {
+                try FileManager.default.removeItem(at: dest)
+                appendConsole("Removed companion mod \(jar).jar from \(instance.name)", level: .info)
+                removed = true
+            } catch {
+                appendConsole("Couldn't remove \(jar).jar from \(instance.name): \(error.localizedDescription)", level: .warning)
+            }
         }
+        return removed
     }
 
     // MARK: - Instance Detail Hub

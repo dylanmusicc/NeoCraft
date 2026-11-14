@@ -6,9 +6,10 @@ import UniformTypeIdentifiers
 // Generates the NeoCraft app icon as an .iconset directory. The build script
 // runs this and then feeds the directory to `iconutil`.
 //
-// Design: a Minecraft grass block in isometric view — pixel-green top,
-// layered dirt sides — centered on a deep forest-green tile. Flat, chunky
-// and readable at 16 px, like a real block texture.
+// Design: a Liquid-Glass Minecraft cube — a translucent isometric block
+// with cyan glass faces, specular highlights and drifting "shard"
+// sparkles — floating on a deep navy glass tile. Glossy, bright edge
+// light and readable at 16 px.
 
 let arguments = CommandLine.arguments
 let outputPath = arguments.count > 1 ? arguments[1] : "build/icon.iconset"
@@ -70,7 +71,7 @@ func makeIcon(pixels: Int) -> CGImage? {
         color: CGColor(red: 0.01, green: 0.03, blue: 0.02, alpha: 0.45)
     )
     context.addPath(backgroundPath)
-    context.setFillColor(CGColor(red: 0.10, green: 0.20, blue: 0.13, alpha: 1))
+    context.setFillColor(CGColor(red: 0.07, green: 0.10, blue: 0.22, alpha: 1))
     context.fillPath()
     context.restoreGState()
 
@@ -78,11 +79,12 @@ func makeIcon(pixels: Int) -> CGImage? {
     context.addPath(backgroundPath)
     context.clip()
 
-    // Background: deep forest gradient, darker at the bottom like a cave wall.
+    // Background: deep navy glass gradient — brighter at the top like a
+    // lit pane of smoked glass.
     let bgColors = [
-        CGColor(red: 0.16, green: 0.32, blue: 0.19, alpha: 1),
-        CGColor(red: 0.08, green: 0.17, blue: 0.11, alpha: 1),
-        CGColor(red: 0.05, green: 0.11, blue: 0.08, alpha: 1)
+        CGColor(red: 0.16, green: 0.22, blue: 0.48, alpha: 1),
+        CGColor(red: 0.08, green: 0.11, blue: 0.30, alpha: 1),
+        CGColor(red: 0.04, green: 0.06, blue: 0.16, alpha: 1)
     ] as CFArray
     if let bg = CGGradient(colorsSpace: colorSpace, colors: bgColors, locations: [0, 0.55, 1]) {
         context.drawLinearGradient(
@@ -93,11 +95,27 @@ func makeIcon(pixels: Int) -> CGImage? {
         )
     }
 
-    // Faint pixel-grid texture on the background (Minecraft dirt vibe).
-    let gridAlpha = pixels >= 64 ? 0.05 : 0.0
+    // Specular sheen: a soft white band across the upper tile, like light
+    // catching the top edge of a glass pane.
+    let sheenColors = [
+        CGColor(red: 1, green: 1, blue: 1, alpha: 0.30),
+        CGColor(red: 1, green: 1, blue: 1, alpha: 0.10),
+        CGColor(red: 1, green: 1, blue: 1, alpha: 0)
+    ] as CFArray
+    if let sheen = CGGradient(colorsSpace: colorSpace, colors: sheenColors, locations: [0, 0.45, 1]) {
+        context.drawLinearGradient(
+            sheen,
+            start: CGPoint(x: rect.minX, y: rect.maxY - rect.height * 0.55),
+            end: CGPoint(x: rect.minX + rect.width * 0.5, y: rect.maxY),
+            options: []
+        )
+    }
+
+    // Faint pixel-grid texture on the background.
+    let gridAlpha = pixels >= 64 ? 0.04 : 0.0
     if gridAlpha > 0 {
         let cell = size / 16
-        context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: gridAlpha))
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: gridAlpha))
         var gy = rect.minY
         while gy < rect.maxY {
             var gx = rect.minX
@@ -111,10 +129,10 @@ func makeIcon(pixels: Int) -> CGImage? {
         }
     }
 
-    // Soft glow behind the block.
+    // Cool glow behind the glass block.
     let glowColors = [
-        CGColor(red: 0.55, green: 0.85, blue: 0.35, alpha: 0.30),
-        CGColor(red: 0.55, green: 0.85, blue: 0.35, alpha: 0)
+        CGColor(red: 0.45, green: 0.75, blue: 1.00, alpha: 0.34),
+        CGColor(red: 0.45, green: 0.75, blue: 1.00, alpha: 0)
     ] as CFArray
     if let glow = CGGradient(colorsSpace: colorSpace, colors: glowColors, locations: [0, 1]) {
         let glowCenter = CGPoint(x: rect.midX, y: rect.midY - rect.height * 0.04)
@@ -178,39 +196,40 @@ func makeIcon(pixels: Int) -> CGImage? {
         context.restoreGState()
     }
 
-    // Grass top: bright green with a sunlit gradient.
+    // Glass top face: pale cyan highlight melting into saturated blue.
     fillFaceGradient(
         [top, upperRight, center, upperLeft],
         bbox: CGRect(x: cx - dx, y: cy, width: dx * 2, height: cubeRadius),
         colors: [
-            CGColor(red: 0.62, green: 0.86, blue: 0.32, alpha: 1),
-            CGColor(red: 0.45, green: 0.72, blue: 0.25, alpha: 1)
+            CGColor(red: 0.72, green: 0.92, blue: 1.00, alpha: 1),
+            CGColor(red: 0.35, green: 0.68, blue: 0.98, alpha: 1)
         ]
     )
 
-    // Dirt sides: right face lit, left face shaded (classic MC lighting).
+    // Glass sides: right face catches the light, left face sits deeper.
     fillFaceGradient(
         [center, upperRight, lowerRight, bottom],
         bbox: CGRect(x: cx, y: cy - cubeRadius, width: dx, height: cubeRadius * 2),
         colors: [
-            CGColor(red: 0.56, green: 0.39, blue: 0.26, alpha: 1),
-            CGColor(red: 0.42, green: 0.28, blue: 0.17, alpha: 1)
+            CGColor(red: 0.38, green: 0.62, blue: 0.95, alpha: 1),
+            CGColor(red: 0.16, green: 0.38, blue: 0.78, alpha: 1)
         ]
     )
     fillFaceGradient(
         [center, upperLeft, lowerLeft, bottom],
         bbox: CGRect(x: cx - dx, y: cy - cubeRadius, width: dx, height: cubeRadius * 2),
         colors: [
-            CGColor(red: 0.40, green: 0.27, blue: 0.17, alpha: 1),
-            CGColor(red: 0.30, green: 0.19, blue: 0.11, alpha: 1)
+            CGColor(red: 0.22, green: 0.42, blue: 0.82, alpha: 1),
+            CGColor(red: 0.10, green: 0.24, blue: 0.58, alpha: 1)
         ]
     )
 
-    // Pixel speckles on the dirt faces — the blocky texture signature.
+    // Glass shards: pale sparkles trapped inside the block — the pixel
+    // signature of the old block texture, reimagined as inclusions.
     if pixels >= 48 {
         let speck = max(1.5, size * 0.006)
-        let dirtDark = CGColor(red: 0.22, green: 0.14, blue: 0.08, alpha: 0.8)
-        let dirtLight = CGColor(red: 0.62, green: 0.45, blue: 0.30, alpha: 0.7)
+        let shardDark = CGColor(red: 0.10, green: 0.22, blue: 0.55, alpha: 0.8)
+        let shardLight = CGColor(red: 0.80, green: 0.95, blue: 1.00, alpha: 0.85)
         var seed: UInt64 = 0x9E3779B97F4A7C15
         func rand() -> CGFloat {
             seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17
@@ -220,29 +239,29 @@ func makeIcon(pixels: Int) -> CGImage? {
         for _ in 0..<26 {
             let px = cx + dx * rand() * 0.9
             let py = cy - cubeRadius + cubeRadius * 2 * rand()
-            let col = rand() > 0.5 ? dirtDark : dirtLight
+            let col = rand() > 0.5 ? shardDark : shardLight
             context.setFillColor(col)
             context.fill(CGRect(x: px, y: py, width: speck, height: speck))
         }
         for _ in 0..<22 {
             let px = cx - dx + dx * rand() * 0.9
             let py = cy - cubeRadius + cubeRadius * 2 * rand()
-            let col = rand() > 0.5 ? dirtDark : dirtLight
+            let col = rand() > 0.5 ? shardDark : shardLight
             context.setFillColor(col)
             context.fill(CGRect(x: px, y: py, width: speck, height: speck))
         }
-        // Grass tufts: tiny lighter-green pixels on the top face.
-        let tuft = CGColor(red: 0.75, green: 0.95, blue: 0.40, alpha: 0.9)
+        // Top-face glints.
+        let glint = CGColor(red: 0.95, green: 1.00, blue: 1.00, alpha: 0.9)
         for _ in 0..<18 {
             let px = cx - dx + dx * 2 * rand()
             let py = cy + cubeRadius * rand()
-            context.setFillColor(tuft)
+            context.setFillColor(glint)
             context.fill(CGRect(x: px, y: py, width: speck, height: speck))
         }
     }
 
     // Block edges: crisp darker outline like a voxel silhouette.
-    context.setStrokeColor(CGColor(red: 0.10, green: 0.16, blue: 0.08, alpha: 0.85))
+    context.setStrokeColor(CGColor(red: 0.05, green: 0.10, blue: 0.30, alpha: 0.9))
     context.setLineWidth(max(1, size * 0.008))
     context.setLineJoin(.round)
     context.beginPath()
@@ -260,9 +279,9 @@ func makeIcon(pixels: Int) -> CGImage? {
     context.addLine(to: bottom)
     context.strokePath()
 
-    // Grass fringe: a 1-2px lighter lip along the top-face front edges,
-    // like the overhanging grass layer on a real grass block.
-    context.setStrokeColor(CGColor(red: 0.72, green: 0.95, blue: 0.38, alpha: 0.9))
+    // Glass rim: a bright specular lip along the top-face front edges,
+    // like light refracting off the block's upper rim.
+    context.setStrokeColor(CGColor(red: 0.85, green: 0.95, blue: 1.00, alpha: 0.95))
     context.setLineWidth(max(1, size * 0.006))
     context.beginPath()
     context.move(to: upperLeft)
@@ -272,8 +291,8 @@ func makeIcon(pixels: Int) -> CGImage? {
 
     context.restoreGState()
 
-    // Crisp inner border on the tile.
-    context.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.18))
+    // Crisp inner border on the tile — a brighter glass rim.
+    context.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.30))
     context.setLineWidth(max(1, size * 0.006))
     context.addPath(backgroundPath)
     context.strokePath()

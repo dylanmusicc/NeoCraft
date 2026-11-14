@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.neocraft.ui.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "TitleScreenMixin",
+    "PauseScreenMixin",
+    "DeathScreenMixin",
+    "OptionsScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

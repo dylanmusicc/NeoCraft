@@ -3,7 +3,7 @@
 <img src="https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge&logo=apple" alt="macOS 14+">
 <img src="https://img.shields.io/badge/Apple_Silicon-arm64-4ADE80?style=for-the-badge&logo=apple" alt="Apple Silicon">
 <img src="https://img.shields.io/badge/Swift-6-FBBF24?style=for-the-badge&logo=swift" alt="Swift 6">
-<img src="https://img.shields.io/badge/Version-2.0.1-7C3AED?style=for-the-badge" alt="v2.0.1">
+<img src="https://img.shields.io/badge/Version-2.1.1-7C3AED?style=for-the-badge" alt="v2.1.1">
 
 # ⛏️ NeoCraft
 
@@ -31,24 +31,25 @@ alles wie von Zauberhand.
 | 🎨 **Studio** | Themes, Wallpapers, Akzente, Grid — dein Launcher, dein Stil. Frosted Glass bis OLED Dark. |
 | 🌡️ **Kühl & leise** | 4,5 GB Heap, G1GC-Tuning, FPS-Cap & Render-Distance — dein MacBook bleibt kühl. |
 | 📡 **Server Radar** | Server-Liste mit Live-Ping direkt im Launcher. |
-| 🖥️ **Welt hosten** | Singleplayer-Welt als Java-Dedicated-Server — offizielle `server.jar`, gleiche Version, LAN-ready. |
-| 📊 **Server Dashboard** | Live-Konsole mit Commands, Spielerliste (Op/Kick), Lifecycle, `server.properties`-Editor, Dateibrowser & World-Backups. |
+| 🖥️ **Server-Tab** | Dedizierte Server-Verwaltung: Java (Vanilla/Paper/Fabric) **und** Bedrock Dedicated Server — erstellen, starten, stoppen, Plugins/Mods/Ressourcen, Presets, Backups, Welt-Import/Export, Update-Checks. |
+| 📦 **Extensions** | Paper → Plugins, Fabric → Mods, Vanilla → Resource Packs — per Modrinth-Suche, URL oder Datei. |
+| 🌍 **Server-Gruppen** | Server gruppieren, Akzentfarben, Presets (Survival, Creative, Minigame, Hardcore, SMP) mit einem Klick anwenden. |
+| 📥 **Welt-Transfer** | Server-Welt als `.zip` exportieren oder aus einem Archiv ersetzen (Auto-Backup vorher). |
+| 🧩 **Ingame-Mods** | Eigene Fabric-Mods: HUD-Widgets, Host-Panel und NeoCraft-Screen-Theme — konfigurierbar im Studio (Beta). |
 
 ### 🖥️ Server hosten — so geht's
 
-1. **Instanz → Welten-Tab → Host** auf der gewünschten Welt (Java-Instanzen).
-2. Name, Port und Online-Mode wählen — NeoCraft lädt die offizielle
-   `server.jar` der passenden Minecraft-Version und kopiert die Welt.
-3. Server im **Dashboard** (Sidebar) oder unter **Server → Hosted Worlds**
-   starten — Freunde treten über `LAN-IP:Port` bei.
+1. **Server-Tab → New Server** — Java (Vanilla, Paper oder Fabric) oder
+   Bedrock Dedicated Server (Beta), mit leerer Welt oder einer Welt aus
+   einer Instanz.
+2. Server im Dashboard starten — Live-Konsole, Spielerliste (Op/Kick),
+   Start/Stop/Restart, `server.properties`-Editor, Dateibrowser,
+   World-Backups, Extensions und Update-Check inklusive.
+3. Freunde treten über `LAN-IP:Port` bei.
 
-Das Dashboard bietet pro Server: Live-Konsole mit Command-Eingabe
-(`say`, `list`, `save-all`, …), Spielerliste mit Op/Kick, Start/Stop/
-Restart, Auto-Start mit NeoCraft, Sync der Welt zurück in die
-Singleplayer-Instanz, World-Backups mit Restore, einen Dateibrowser für
-den Server-Ordner (`ops.json`, `whitelist.json`, `banned-*.json`, …) und
-einen `server.properties`-Editor (MOTD, Port, Online-Mode, PvP,
-Whitelist, Gamemode, Difficulty, Distanzen, Spawn-Schutz).
+Presets (Survival, Creative, Minigame, Hardcore, SMP) schreiben die
+`server.properties` in einem Klick — Gruppen und Akzentfarben halten
+die Server-Liste übersichtlich.
 
 ---
 
@@ -56,10 +57,10 @@ Whitelist, Gamemode, Difficulty, Distanzen, Spawn-Schutz).
 
 ```bash
 # 1. NeoCraft holen
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.0.1.pkg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.1.pkg
 
 # 2. Installieren (zieht die App nach /Applications)
-open NeoCraft-2.0.1.pkg
+open NeoCraft-2.1.1.pkg
 ```
 
 > **Erster Start:** macOS fragt einmal nach Erlaubnis — **Rechtsklick → Öffnen**.
@@ -72,8 +73,8 @@ Das richtige JDK lädt sich von allein. Fertig.
 <summary>🖼️ Alternativ: DMG (Drag & Drop)</summary>
 
 ```bash
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.0.1.dmg
-open NeoCraft-2.0.1.dmg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.1.dmg
+open NeoCraft-2.1.1.dmg
 # NeoCraft.app auf den Applications-Ordner ziehen
 ```
 
@@ -158,8 +159,19 @@ sicher im **macOS Keychain**, nie in `state.json`.
 
 | Taste | Aktion |
 |---|---|
-| `Right Shift` | HUD-Editor öffnen |
-| `F8` | HUD an/aus |
+| `N` | NeoCraft-Menü (Server, Design, HUD) |
+| `Right Shift` | HUD-Editor öffnen (Beta) |
+| `F8` | HUD an/aus (Beta) |
+| `K` | NeoCraft Host-Panel (Beta) |
+
+Das `neocraft-ui`-Mod ist auf jeder Fabric-Instanz aktiv: Es theme't
+Title-, Pause-, Death- und Options-Screens im NeoCraft-Look (Farben und
+Style synchron mit dem Launcher-Theme) und öffnet per `N` oder dem
+NeoCraft-Button auf Title/Pause ein Menü mit Server-Verwaltung
+(Host/Start/Stop über die Bridge), Theme-Editor und Mod-Status. Das
+Menu spiegelt `config/neocraft_ui.json` — Studio → In-Game UI editiert
+dasselbe Dokument. HUD und Host-Panel bleiben hinter dem Beta-Flag
+„In-Game NeoCraft Mods" (Settings).
 
 Performance-Defaults: `-Xmx4608M`, G1GC, `AlwaysPreTouch`, 60 FPS-Cap,
 10-Chunks Render-Distance — optimiert für passiv gekühlte MacBooks.

@@ -33,7 +33,8 @@ import java.util.Map;
  */
 public class NeoCraftHudConfigScreen extends Screen {
 
-    private static final int PANEL_W = 196;
+    private static final int MAX_PANEL_W = 196;
+    private int panelW;
     private static final int TOP_H = 46;
     private static final int CONTROLS_H = 208;
     private static final int ACCENT = 0xFF0A84FF;
@@ -61,6 +62,9 @@ public class NeoCraftHudConfigScreen extends Screen {
 
     @Override
     protected void init() {
+        // Left rail shrinks on narrow windows; the editor area always
+        // keeps at least ~2/3 of the screen.
+        panelW = Math.min(MAX_PANEL_W, Math.max(140, width / 3));
         rebuild();
     }
 
@@ -97,16 +101,16 @@ public class NeoCraftHudConfigScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Save"), b -> HudConfig.saveNow())
                 .bounds(width - 110, y + 24, 50, 18).build());
         addRenderableWidget(Button.builder(Component.literal("Add Widget"), b -> addWidget())
-                .bounds(PANEL_W + 8, y + 24, 90, 18).build());
+                .bounds(panelW + 8, y + 24, 90, 18).build());
 
         widgetListTop = TOP_H + 18;
-        controlsTop = height - CONTROLS_H;
+        controlsTop = Math.max(TOP_H + 80, height - CONTROLS_H);
         if (selected != null) buildControls();
     }
 
     private void buildControls() {
-        int x = PANEL_W + 8;
-        int w = width - PANEL_W - 16;
+        int x = panelW + 8;
+        int w = Math.max(160, width - panelW - 16);
         int y = controlsTop + 8;
         int rowH = 20;
 
@@ -266,7 +270,7 @@ public class NeoCraftHudConfigScreen extends Screen {
     private void cycleStyle(int idx) {
         switch (idx) {
             case 0 -> selected.containerStyle = cycle(selected.containerStyle,
-                    "minecraft", "applePill", "liquidGlass", "sharpVoxel", "minimalText", "neonOutline");
+                    "minecraft", "neocraft", "applePill", "liquidGlass", "sharpVoxel", "minimalText", "neonOutline");
             case 1 -> selected.fontStyle = cycle(selected.fontStyle, "apple", "minecraft");
             case 2 -> selected.textStyle = cycle(selected.textStyle, "regular", "bold", "uppercase");
             case 3 -> selected.colorMode = cycle(selected.colorMode,
@@ -394,9 +398,9 @@ public class NeoCraftHudConfigScreen extends Screen {
         HudProfile profile = HudConfig.activeProfile();
 
         g.fill(0, 0, width, height, 0x9010141C);
-        panel(g, 6, TOP_H, PANEL_W - 12, height - TOP_H - 12, 0x99101820);
-        panel(g, PANEL_W + 2, TOP_H, width - PANEL_W - 8, height - TOP_H - 12, 0x99101820);
-        panel(g, PANEL_W + 8, controlsTop, width - PANEL_W - 16, CONTROLS_H - 6, 0xCC0D1420);
+        panel(g, 6, TOP_H, panelW - 12, height - TOP_H - 12, 0x99101820);
+        panel(g, panelW + 2, TOP_H, width - panelW - 8, height - TOP_H - 12, 0x99101820);
+        panel(g, panelW + 8, controlsTop, width - panelW - 16, CONTROLS_H - 6, 0xCC0D1420);
 
         // ---- Widget list ----
         g.text(this.font, "WIDGETS — " + (profile == null ? 0 : profile.widgets.size()),
@@ -407,7 +411,7 @@ public class NeoCraftHudConfigScreen extends Screen {
             for (HudWidget w : profile.widgets) {
                 if (rowY + 18 > controlsTop - 8) break;
                 boolean sel = w == selected;
-                int rowX = 10, rowW = PANEL_W - 20;
+                int rowX = 10, rowW = panelW - 20;
                 int bg = sel ? 0x55228BFF : (mouseY >= rowY && mouseY < rowY + 18
                         && mouseX >= rowX && mouseX < rowX + rowW ? 0x332A2F3A : 0x22182022);
                 g.fill(rowX, rowY, rowX + rowW, rowY + 18, bg);
@@ -428,7 +432,7 @@ public class NeoCraftHudConfigScreen extends Screen {
         }
 
         // ---- Canvas ----
-        int cx0 = PANEL_W + 8, cy0 = TOP_H + 4;
+        int cx0 = panelW + 8, cy0 = TOP_H + 4;
         int cx1 = width - 8, cy1 = controlsTop - 6;
         drawGrid(g, cx0, cy0, cx1, cy1);
 
@@ -484,7 +488,7 @@ public class NeoCraftHudConfigScreen extends Screen {
     }
 
     private void drawControlLabels(GuiGraphicsExtractor g) {
-        int x = PANEL_W + 8;
+        int x = panelW + 8;
         int y = controlsTop + 8;
         g.text(this.font, selected.kind + " — " + selected.containerStyle
                 + " / " + selected.colorMode, x, y - 12, 0xFF8E8E93);
@@ -545,12 +549,12 @@ public class NeoCraftHudConfigScreen extends Screen {
         int button = event.buttonInfo().button();
         HudProfile profile = HudConfig.activeProfile();
 
-        if (profile != null && mouseX < PANEL_W && mouseY >= widgetListTop + 14
+        if (profile != null && mouseX < panelW && mouseY >= widgetListTop + 14
                 && mouseY < controlsTop - 8) {
             int row = (int) ((mouseY - (widgetListTop + 14)) / 20);
             if (row >= 0 && row < profile.widgets.size()) {
                 HudWidget w = profile.widgets.get(row);
-                int rowX = 10, rowW = PANEL_W - 20;
+                int rowX = 10, rowW = panelW - 20;
                 boolean eyeZone = mouseX > rowX + rowW - 40;
                 if (eyeZone) {
                     w.visible = !w.visible;
@@ -563,7 +567,7 @@ public class NeoCraftHudConfigScreen extends Screen {
             }
         }
 
-        if (profile != null && mouseX >= PANEL_W + 8 && mouseY >= TOP_H
+        if (profile != null && mouseX >= panelW + 8 && mouseY >= TOP_H
                 && mouseY < controlsTop - 6) {
             HudWidget hit = null;
             for (int i = profile.widgets.size() - 1; i >= 0; i--) {
@@ -649,7 +653,7 @@ public class NeoCraftHudConfigScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY,
                                  double scrollX, double scrollY) {
-        if (selected != null && mouseX >= PANEL_W + 8 && mouseY < controlsTop - 6) {
+        if (selected != null && mouseX >= panelW + 8 && mouseY < controlsTop - 6) {
             selected.scale = clampD(selected.scale * (scrollY > 0 ? 1.06 : 0.94), 0.25, 4.0);
             HudConfig.requestSave();
             rebuild();

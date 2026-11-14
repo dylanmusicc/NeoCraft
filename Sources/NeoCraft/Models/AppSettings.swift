@@ -110,6 +110,9 @@ struct BetaFeatures: Codable, Equatable, Sendable {
     /// Neo Studio in-game HUD: companion mod auto-install on Fabric
     /// instances, launch-time config sync and the Studio apply flow.
     var inGameHUD = false
+    /// Neo Studio in-game UI theme (`neocraft-ui` mod): accent tints and
+    /// the optional full redesign on title/pause/death screens.
+    var inGameUI = false
     /// Seed & biome radar for worlds (minimap + seed tools in backups and
     /// the instance detail hub).
     var worldRadar = false
@@ -118,15 +121,62 @@ struct BetaFeatures: Codable, Equatable, Sendable {
     /// Bedrock edition picker in the instance editor. Bedrock runs through
     /// the NeoCraft Bedrock component bundled inside NeoCraft.app.
     var bedrockEdition = false
+    /// Bedrock Dedicated Server hosting (Windows BDS through Wine). Off by
+    /// default so Bedrock gameplay doesn't come with server tooling —
+    /// enable it independently in Settings → Beta Features.
+    var bedrockServers = false
 
     init() {}
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         inGameHUD = try container.decodeIfPresent(Bool.self, forKey: .inGameHUD) ?? false
+        inGameUI = try container.decodeIfPresent(Bool.self, forKey: .inGameUI) ?? false
         worldRadar = try container.decodeIfPresent(Bool.self, forKey: .worldRadar) ?? false
         customLaunchArgs = try container.decodeIfPresent(Bool.self, forKey: .customLaunchArgs) ?? false
         bedrockEdition = try container.decodeIfPresent(Bool.self, forKey: .bedrockEdition) ?? false
+        bedrockServers = try container.decodeIfPresent(Bool.self, forKey: .bedrockServers) ?? false
+    }
+}
+
+/// In-game UI theme consumed by the `neocraft-ui` Fabric companion mod via
+/// `config/neocraft_ui.json`. Edited in Neo Studio → In-Game UI.
+struct NeoCraftUITheme: Codable, Equatable, Sendable {
+    /// Master switch for the whole NeoCraft UI mod.
+    var enabled = true
+    /// Full NeoCraft redesign (gradient backdrop + wordmark) instead of
+    /// just accent tints.
+    var fullRedesign = false
+    /// Accent hex without '#'.
+    var accentHex = NeoAccent.appleBlue.rawValue
+    /// When true the in-game accent mirrors the launcher's Studio accent
+    /// (`settings.accentHex`) so both UIs always match.
+    var followLauncherAccent = true
+    /// Screen tint hex without '#' applied as overlay. Empty = follow
+    /// the effective accent color.
+    var tintHex = ""
+    /// Tint overlay opacity 0…1.
+    var tintOpacity = 0.14
+    /// Per-screen toggles (raw screen ids).
+    var screenTitle = true
+    var screenPause = true
+    var screenDeath = true
+    var screenOptions = false
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        fullRedesign = try container.decodeIfPresent(Bool.self, forKey: .fullRedesign) ?? false
+        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? NeoAccent.appleBlue.rawValue
+        followLauncherAccent = try container.decodeIfPresent(Bool.self, forKey: .followLauncherAccent) ?? true
+        tintHex = try container.decodeIfPresent(String.self, forKey: .tintHex) ?? ""
+        tintOpacity = try container.decodeIfPresent(Double.self, forKey: .tintOpacity) ?? 0.14
+        screenTitle = try container.decodeIfPresent(Bool.self, forKey: .screenTitle) ?? true
+        screenPause = try container.decodeIfPresent(Bool.self, forKey: .screenPause) ?? true
+        screenDeath = try container.decodeIfPresent(Bool.self, forKey: .screenDeath) ?? true
+        screenOptions = try container.decodeIfPresent(Bool.self, forKey: .screenOptions) ?? false
     }
 }
 
@@ -165,6 +215,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     /// Dashboard card raw values enabled on the Play screen.
     var dashboardCards: [String] = DashboardCardKind.allCases.map(\.rawValue)
     var hudLayout = HUDLayout()
+    /// NeoCraft UI theme for the in-game screens mod (`neocraft_ui.json`).
+    var uiTheme = NeoCraftUITheme()
     /// Active curated theme preset id ("" = custom mix).
     var curatedTheme = ""
     /// Corner treatment for cards and panels.
@@ -224,6 +276,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         sidebarOrder = try container.decodeIfPresent([String].self, forKey: .sidebarOrder) ?? []
         dashboardCards = try container.decodeIfPresent([String].self, forKey: .dashboardCards) ?? DashboardCardKind.allCases.map(\.rawValue)
         hudLayout = try container.decodeIfPresent(HUDLayout.self, forKey: .hudLayout) ?? HUDLayout()
+        uiTheme = try container.decodeIfPresent(NeoCraftUITheme.self, forKey: .uiTheme) ?? NeoCraftUITheme()
         curatedTheme = try container.decodeIfPresent(String.self, forKey: .curatedTheme) ?? ""
         cornerStyle = try container.decodeIfPresent(NeoCornerStyle.self, forKey: .cornerStyle) ?? .rounded
         sidebarMaterial = try container.decodeIfPresent(Double.self, forKey: .sidebarMaterial) ?? 0.5

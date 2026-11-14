@@ -1,0 +1,11 @@
+{
+  "key.neocraft-host.panel": "NeoCraft Host Panel",
+  "key.category.neocraft-host.main": "NeoCraft Host",
+  "neocraft-host.ui.panel_button": "NeoCraft Host",
+  "neocraft-host.ui.host_button": "Host",
+  "neocraft-host.ui.start": "Start",
+  "neocraft-host.ui.stop": "Stop",
+  "neocraft-host.ui.join": "Join",
+  "neocraft-host.ui.copy": "Copy IP",
+  "neocraft-host.ui.open_app": "Open NeoCraft"
+}

@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Full management console for one hosted dedicated server: live server
 /// console with command input, player list, lifecycle controls, world
 /// backups, a file browser for the server folder and the editable
-/// `server.properties` surface. Rendered inside the Dashboard page — the
-/// layout fills whatever space the detail column gives it.
+/// `server.properties` surface. Rendered inside the Servers tab's detail
+/// pane — adapts to a single column when the pane is narrow.
 struct ServerDashboardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -36,6 +37,9 @@ struct ServerDashboardView: View {
         _difficulty = State(initialValue: props["difficulty"] ?? "easy")
         _gamemode = State(initialValue: props["gamemode"] ?? "survival")
         _propertiesLoaded = State(initialValue: !props.isEmpty)
+        _groupText = State(initialValue: server.group)
+        _colorHex = State(initialValue: server.colorHex)
+        _presetPick = State(initialValue: ServerPreset(rawValue: server.preset) ?? .custom)
     }
 
     @State private var command = ""
@@ -68,6 +72,37 @@ struct ServerDashboardView: View {
     @State private var gamemode = "survival"
     @State private var propertiesLoaded = false
 
+    // Extensions (plugins/mods) state — Java servers with Paper/Fabric only
+    @State private var extensions: [ServerFileEntry] = []
+    @State private var extensionQuery = ""
+    @State private var extensionResults: [ModrinthSearchHit] = []
+    @State private var extensionSearching = false
+    @State private var installURL = ""
+    @State private var showJarImporter = false
+    @State private var searchTask: Task<Void, Never>?
+
+    // Meta (group/colour/preset), update check and world transfer state
+    @State private var groupText = ""
+    @State private var colorHex = ""
+    @State private var presetPick: ServerPreset = .custom
+    @State private var updateInfo: AppModel.ServerUpdateInfo?
+    @State private var checkingUpdate = false
+    @State private var updateBusy = false
+    @State private var showWorldImporter = false
+
+    /// The freshest copy of this server — `server` is only a snapshot, so
+    /// meta edits made here are read back through the model.
+    private var liveServer: HostedServer {
+        model.hostedServers.first { $0.id == server.id } ?? server
+    }
+
+    /// Swatches offered for a server's accent colour.
+    private static let serverColors = [
+        "5B8CFF", "38BDF8", "4ADE80", "2DD4BF",
+        "FBBF24", "FB923C", "F472B6", "A78BFA",
+        "EF4444", "F87171",
+    ]
+
     private var running: Bool { model.isServerRunning(server) }
     private var ready: Bool { model.isServerReady(server) }
     private var settingUp: Bool { model.isSettingUpServer(server) }
@@ -77,42 +112,60 @@ struct ServerDashboardView: View {
     private var currentDirectory: URL { browserDirectory ?? server.directory }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                headerCard
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 14) {
+        GeometryReader { geo in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    headerCard
+                    if geo.size.width >= 720 {
+                        HStack(alignment: .top, spacing: 14) {
+                            VStack(spacing: 14) {
+                                consoleCard
+                                playersCard
+                            }
+                            .frame(maxWidth: .infinity)
+                            VStack(spacing: 14) {
+                                actionsCard
+                                extensionsCard
+                                backupsCard
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        HStack(alignment: .top, spacing: 14) {
+                            filesCard
+                                .frame(maxWidth: .infinity)
+                            settingsCard
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        // Narrow detail pane (e.g. master-detail Server
+                        // tab): stack everything so cards keep room
+                        // to breathe instead of squeezing two columns.
                         consoleCard
                         playersCard
-                    }
-                    .frame(maxWidth: .infinity)
-                    VStack(spacing: 14) {
                         actionsCard
+                        extensionsCard
                         backupsCard
+                        filesCard
+                        settingsCard
                     }
-                    .frame(maxWidth: .infinity)
                 }
-                HStack(alignment: .top, spacing: 14) {
-                    filesCard
-                        .frame(maxWidth: .infinity)
-                    settingsCard
-                        .frame(maxWidth: .infinity)
-                }
+                .padding(20)
             }
-            .padding(20)
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             browserDirectory = server.directory
             await loadProperties()
             await reloadFiles()
             await reloadBackups()
+            await reloadExtensions()
             while !Task.isCancelled {
                 if model.isServerRunning(server) {
                     let status = await ServerPinger.ping(address)
                     playersPing = status
                 }
+                await reloadExtensions()
                 try? await Task.sleep(for: .seconds(10))
             }
         }
@@ -460,6 +513,53 @@ struct ServerDashboardView: View {
                     }
                 }
                 .toggleStyle(NeoToggleStyle())
+
+                // Software update check
+                HStack(spacing: 8) {
+                    Button(checkingUpdate ? "Checking…" : "Check for Updates") {
+                        Task { await checkForUpdate() }
+                    }
+                    .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                    .disabled(checkingUpdate || running || settingUp || server.serverType == .fabric && server.edition == .java)
+                    if let info = updateInfo {
+                        Text(info.title)
+                            .font(.neoCaption.weight(.semibold))
+                            .foregroundStyle(NeoPalette.mint)
+                    }
+                }
+                if let info = updateInfo {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(info.detail)
+                            .font(.neoCaption).foregroundStyle(.secondary)
+                        Button(updateBusy ? "Updating…" : "Install Update") {
+                            Task { await applyUpdate() }
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .primary, compact: true))
+                        .disabled(updateBusy || running || settingUp)
+                    }
+                }
+
+                // World transfer
+                HStack(spacing: 8) {
+                    Button("Export World…") { exportWorld() }
+                        .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                        .disabled(running || settingUp)
+                    Button("Import World…") { showWorldImporter = true }
+                        .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                        .disabled(running || settingUp)
+                    Text("The old world is parked in backups/ on import.")
+                        .font(.neoCaption).foregroundStyle(.secondary)
+                }
+                .fileImporter(
+                    isPresented: $showWorldImporter,
+                    allowedContentTypes: [.zip],
+                    allowsMultipleSelection: false
+                ) { result in
+                    if case .success(let urls) = result, let archive = urls.first {
+                        model.importServerWorld(server, from: archive)
+                    }
+                }
+
                 Button("Delete Server…", role: .destructive) {
                     confirmDelete = true
                 }
@@ -467,6 +567,245 @@ struct ServerDashboardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: - Extensions (plugins, mods & resource packs)
+
+    /// Installed extensions plus the three install paths: Modrinth search,
+    /// a direct URL and a local file. Paper takes plugins, Fabric takes
+    /// mods, vanilla takes resource packs — Mojang's jar runs no code.
+    @ViewBuilder
+    private var extensionsCard: some View {
+        if server.edition == .java, server.extensionDirectory != nil {
+            let isPack = server.serverType == .vanilla
+            NeoCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionHeader(
+                            title: server.serverType.extensionTitle,
+                            symbol: isPack ? "paintpalette.fill" : "puzzlepiece.extension.fill"
+                        )
+                        Spacer()
+                        Button {
+                            Task { await reloadExtensions() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+                        .help("Refresh")
+                    }
+
+                    if extensions.isEmpty {
+                        Text(isPack
+                             ? "No resource packs yet — add them from Modrinth, a URL or a .zip file. Players enable them in their own resource pack menu."
+                             : "Nothing installed yet — add \(server.serverType.extensionNoun == "plugin" ? "plugins" : "mods") from Modrinth, a URL or a file.")
+                            .font(.neoCaption).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(extensions) { entry in
+                            extensionRow(entry)
+                        }
+                    }
+
+                    Divider()
+
+                    // Modrinth search
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("Search Modrinth…", text: $extensionQuery)
+                            .textFieldStyle(.plain)
+                            .font(.neoCaption)
+                        if extensionSearching {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    if !extensionResults.isEmpty {
+                        VStack(spacing: 4) {
+                            ForEach(extensionResults.prefix(6)) { hit in
+                                HStack(spacing: 8) {
+                                    AsyncImage(url: hit.icon) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        Image(systemName: "puzzlepiece.extension.fill")
+                                            .foregroundStyle(NeoPalette.accent)
+                                    }
+                                    .frame(width: 20, height: 20)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(hit.title).font(.neoCaption.weight(.medium)).lineLimit(1)
+                                        Text(hit.description)
+                                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    Button("Install") {
+                                        installFromModrinth(hit)
+                                    }
+                                    .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                                    .disabled(running || settingUp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Direct URL install
+                    HStack(spacing: 8) {
+                        TextField(isPack ? "https://…/pack.zip" : "https://…/\(server.serverType.extensionNoun).jar", text: $installURL)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.neoCaption)
+                        Button("Install") {
+                            installFromURL()
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                        .disabled(running || settingUp || installURL.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button(isPack ? "Install Pack File…" : "Install \(server.serverType.extensionTitle == "Mods" ? "Mod" : "Plugin") File…") {
+                            showJarImporter = true
+                        }
+                        .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                        .disabled(running || settingUp)
+                        Text("Changes apply after a server restart.")
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .fileImporter(
+                isPresented: $showJarImporter,
+                allowedContentTypes: server.serverType.extensionSuffixes.compactMap {
+                    UTType(filenameExtension: String($0.dropFirst()))
+                } + [.data],
+                allowsMultipleSelection: false
+            ) { result in
+                if case .success(let urls) = result, let file = urls.first {
+                    model.installServerExtension(fromFile: file, for: server)
+                }
+            }
+            .onChange(of: extensionQuery) { _, query in
+                searchTask?.cancel()
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    extensionResults = []
+                    extensionSearching = false
+                    return
+                }
+                extensionSearching = true
+                searchTask = Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    guard !Task.isCancelled else { return }
+                    do {
+                        let response = try await model.searchServerExtensions(query: trimmed, for: server)
+                        guard !Task.isCancelled else { return }
+                        extensionResults = response.hits
+                    } catch {
+                        extensionResults = []
+                    }
+                    extensionSearching = false
+                }
+            }
+        }
+    }
+
+    private func extensionRow(_ entry: ServerFileEntry) -> some View {
+        let disabled = entry.name.hasSuffix(".disabled")
+        return HStack(spacing: 8) {
+            Image(systemName: disabled ? "eye.slash" : "puzzlepiece.extension.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(disabled ? Color.secondary : NeoPalette.accent)
+                .frame(width: 16)
+            Text(disabled ? String(entry.name.dropLast(".disabled".count)) : entry.name)
+                .font(.neoCaption.weight(.medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(disabled ? .secondary : .primary)
+            Spacer()
+            Button(disabled ? "Enable" : "Disable") {
+                model.setServerExtensionEnabled(entry, enabled: disabled, for: server)
+                Task { try? await Task.sleep(for: .milliseconds(300)); await reloadExtensions() }
+            }
+            .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+            .disabled(running || server.serverType == .vanilla)
+            Button {
+                model.deleteServerExtension(entry, for: server)
+                Task { try? await Task.sleep(for: .milliseconds(300)); await reloadExtensions() }
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+            .help("Delete")
+        }
+    }
+
+    // MARK: - Updates & world transfer
+
+    private func checkForUpdate() async {
+        checkingUpdate = true
+        updateInfo = await model.checkServerUpdate(server)
+        checkingUpdate = false
+    }
+
+    private func applyUpdate() async {
+        updateBusy = true
+        let ok = await model.applyServerUpdate(server)
+        updateBusy = false
+        if ok { updateInfo = nil }
+    }
+
+    private func exportWorld() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(server.name)-world.zip"
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.exportServerWorld(server, to: url)
+    }
+
+    private func installFromURL() {
+        let trimmed = installURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.scheme?.hasPrefix("http") == true else {
+            model.showToast("Enter a valid http(s) URL to a \(server.serverType == .vanilla ? "pack" : server.serverType.extensionNoun) file")
+            return
+        }
+        model.installServerExtension(from: url, filename: url.lastPathComponent, for: server)
+        installURL = ""
+    }
+
+    private func installFromModrinth(_ hit: ModrinthSearchHit) {
+        let loader: String? = switch server.serverType {
+        case .paper: "paper"
+        case .fabric: "fabric"
+        case .vanilla: nil
+        }
+        Task { [model] in
+            do {
+                let versions = try await model.modrinth.versions(
+                    projectID: hit.projectID,
+                    gameVersion: server.minecraftVersion,
+                    loader: loader
+                )
+                guard let version = versions.first else {
+                    model.showToast("No \(server.minecraftVersion)-compatible version of \(hit.title)")
+                    return
+                }
+                model.installServerExtension(version: version, for: server)
+            } catch {
+                model.showToast("Couldn't fetch versions for \(hit.title)")
+            }
+        }
+    }
+
+    private func reloadExtensions() async {
+        extensions = await model.serverExtensions(for: server)
     }
 
     // MARK: - World backups
@@ -679,6 +1018,74 @@ struct ServerDashboardView: View {
 
                 if running || settingUp {
                     Text("Stop the server to edit settings — a running server rewrites this file on shutdown.")
+                        .font(.neoCaption).foregroundStyle(.secondary)
+                }
+
+                // Launcher-side meta: group, accent colour, preset.
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(title: "Organization", symbol: "folder.badge.gearshape")
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Group").font(.neoCaption).foregroundStyle(.secondary)
+                            TextField("e.g. Survival, Minigames", text: $groupText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 220)
+                                .onSubmit {
+                                    model.updateServerMeta(liveServer, group: groupText)
+                                }
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Accent").font(.neoCaption).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                ForEach(Self.serverColors, id: \.self) { hex in
+                                    Button {
+                                        colorHex = hex
+                                        model.updateServerMeta(liveServer, colorHex: hex)
+                                    } label: {
+                                        Circle()
+                                            .fill(Color(hex: hex))
+                                            .frame(width: 18, height: 18)
+                                            .overlay {
+                                                if colorHex == hex {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                        .foregroundStyle(.white)
+                                                }
+                                            }
+                                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(hex)
+                                }
+                                if !colorHex.isEmpty {
+                                    Button("Auto") {
+                                        colorHex = ""
+                                        model.updateServerMeta(liveServer, colorHex: "")
+                                    }
+                                    .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+                                }
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Preset").font(.neoCaption).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Picker("Preset", selection: $presetPick) {
+                                    ForEach(ServerPreset.allCases) { option in
+                                        Text(option.title).tag(option)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(maxWidth: 140)
+                                Button("Apply") {
+                                    model.applyServerPreset(liveServer, presetPick)
+                                }
+                                .buttonStyle(NeoButtonStyle(kind: .secondary, compact: true))
+                                .disabled(running || settingUp || presetPick == .custom)
+                            }
+                        }
+                    }
+                    Text("Group and accent only change the launcher look. Applying a preset rewrites server.properties — stop the server first.")
                         .font(.neoCaption).foregroundStyle(.secondary)
                 }
 

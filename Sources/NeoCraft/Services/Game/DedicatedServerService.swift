@@ -5,6 +5,7 @@ enum DedicatedServerError: LocalizedError, Sendable {
     case missingWorld(String)
     case notPrepared(String)
     case alreadyRunning(String)
+    case wrongEdition
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum DedicatedServerError: LocalizedError, Sendable {
             return "\"\(name)\" is not fully set up yet — finish creating it first."
         case .alreadyRunning(let name):
             return "The server \"\(name)\" is already running."
+        case .wrongEdition:
+            return "This server isn't a Java dedicated server."
         }
     }
 }
@@ -27,12 +30,14 @@ enum DedicatedServerError: LocalizedError, Sendable {
 /// worlds can be hosted at once.
 actor DedicatedServerService {
     private let versions: VersionService
+    private let fabric: FabricService
     private var processes: [UUID: GameProcess] = [:]
     /// Invoked (on this actor) after a server process exits.
     private var onExit: (@Sendable (UUID, Int32) -> Void)?
 
-    init(versions: VersionService) {
+    init(versions: VersionService, fabric: FabricService) {
         self.versions = versions
+        self.fabric = fabric
     }
 
     func setExitHandler(_ handler: @escaping @Sendable (UUID, Int32) -> Void) {
@@ -45,40 +50,35 @@ actor DedicatedServerService {
 
     // MARK: - Setup
 
-    /// Downloads the official server jar for the world's Minecraft version,
-    /// copies the save into the server folder and writes eula/properties.
-    /// The whole folder is removed again when any step fails.
+    /// Downloads the server software for the server's type (vanilla
+    /// `server.jar`, Paper's paperclip or a scaffolded Fabric server),
+    /// copies the save into the server folder when one was chosen and
+    /// writes eula/properties. `instance` is nil for standalone servers —
+    /// they always boot a fresh world. The whole folder is removed again
+    /// when any step fails.
     func create(
         server: HostedServer,
-        instance: GameInstance,
+        instance: GameInstance?,
+        java: JavaRuntime,
         progress: @escaping @Sendable (ProgressUpdate) -> Void
     ) async throws {
         let fileManager = FileManager.default
+        guard server.edition == .java else {
+            throw DedicatedServerError.wrongEdition
+        }
         try AppPaths.ensureDirectories()
         try fileManager.createDirectory(at: server.directory, withIntermediateDirectories: true)
 
         do {
             progress(ProgressUpdate(fraction: 0.02, detail: "Resolving Minecraft \(server.minecraftVersion)…"))
-            let details = try await versions.details(for: server.minecraftVersion)
-            guard let download = details.downloads?["server"],
-                  let jarURL = URL(string: download.url) else {
-                throw DedicatedServerError.missingServerJar(server.minecraftVersion)
-            }
+            try await installSoftware(for: server, java: java, progress: progress)
 
-            progress(ProgressUpdate(fraction: 0.05, detail: "Downloading dedicated server…"))
-            let jarRequest = DownloadRequest(
-                url: jarURL,
-                destination: server.serverJar,
-                checksum: download.sha1.map { FileChecksum(algorithm: .sha1, value: $0) },
-                expectedSize: download.size,
-                label: "Minecraft \(server.minecraftVersion) server"
-            )
-            try await Downloader.download(jarRequest) { fraction in
-                progress(ProgressUpdate(fraction: 0.05 + fraction * 0.55, detail: "Downloading dedicated server…"))
+            if !server.sourceWorldName.isEmpty, let instance {
+                progress(ProgressUpdate(fraction: 0.7, detail: "Copying world \"\(server.sourceWorldName)\"…"))
+                try await copyWorld(from: instance, server: server)
+            } else {
+                progress(ProgressUpdate(fraction: 0.7, detail: "The server generates its world on first start…"))
             }
-
-            progress(ProgressUpdate(fraction: 0.62, detail: "Copying world \"\(server.sourceWorldName)\"…"))
-            try await copyWorld(from: instance, server: server)
 
             progress(ProgressUpdate(fraction: 0.9, detail: "Writing server configuration…"))
             try writeText("eula=true\n", to: server.directory.appendingPathComponent("eula.txt"))
@@ -89,6 +89,74 @@ actor DedicatedServerService {
         } catch {
             try? fileManager.removeItem(at: server.directory)
             throw error
+        }
+    }
+
+    /// Downloads or scaffolds the software `server.serverType` needs inside
+    /// the server folder.
+    private func installSoftware(
+        for server: HostedServer,
+        java: JavaRuntime,
+        progress: @escaping @Sendable (ProgressUpdate) -> Void
+    ) async throws {
+        switch server.serverType {
+        case .vanilla:
+            let details = try await versions.details(for: server.minecraftVersion)
+            guard let download = details.downloads?["server"],
+                  let jarURL = URL(string: download.url) else {
+                throw DedicatedServerError.missingServerJar(server.minecraftVersion)
+            }
+            progress(ProgressUpdate(fraction: 0.05, detail: "Downloading dedicated server…"))
+            try await Downloader.download(DownloadRequest(
+                url: jarURL,
+                destination: server.serverJar,
+                checksum: download.sha1.map { FileChecksum(algorithm: .sha1, value: $0) },
+                expectedSize: download.size,
+                label: "Minecraft \(server.minecraftVersion) server"
+            )) { fraction in
+                progress(ProgressUpdate(fraction: 0.05 + fraction * 0.6, detail: "Downloading dedicated server…"))
+            }
+
+        case .paper:
+            progress(ProgressUpdate(fraction: 0.05, detail: "Resolving the latest Paper build…"))
+            let build = try await PaperService.latestBuild(for: server.minecraftVersion)
+            progress(ProgressUpdate(fraction: 0.15, detail: "Downloading Paper \(build.version) build \(build.build)…"))
+            try await Downloader.download(DownloadRequest(
+                url: build.url,
+                destination: server.serverJar,
+                label: "Paper \(build.version)-\(build.build)"
+            )) { fraction in
+                progress(ProgressUpdate(fraction: 0.15 + fraction * 0.6, detail: "Downloading Paper…"))
+            }
+
+        case .fabric:
+            progress(ProgressUpdate(fraction: 0.05, detail: "Resolving Fabric loader…"))
+            let loader = try await fabric.latestLoader(for: server.minecraftVersion)
+            let installerVersion = try await FabricServerInstaller.latestInstallerVersion()
+            let installerURL = try FabricServerInstaller.installerJarURL(version: installerVersion)
+            let installerJar = server.directory.appendingPathComponent("fabric-installer.jar")
+            progress(ProgressUpdate(fraction: 0.15, detail: "Downloading Fabric installer \(installerVersion)…"))
+            try await Downloader.download(DownloadRequest(
+                url: installerURL,
+                destination: installerJar,
+                label: "Fabric installer \(installerVersion)"
+            )) { fraction in
+                progress(ProgressUpdate(fraction: 0.15 + fraction * 0.4, detail: "Downloading Fabric installer…"))
+            }
+            progress(ProgressUpdate(fraction: 0.6, detail: "Scaffolding the Fabric server…"))
+            _ = try await FabricServerInstaller.scaffold(
+                directory: server.directory,
+                minecraftVersion: server.minecraftVersion,
+                loaderVersion: loader.version,
+                java: java,
+                installerJar: installerJar
+            ) { text, level in
+                // Installer output is verbose; only surface real problems.
+                if level == .error {
+                    FileHandle.standardError.write(Data(text.utf8))
+                }
+            }
+            try? FileManager.default.removeItem(at: installerJar)
         }
     }
 
@@ -113,17 +181,21 @@ actor DedicatedServerService {
         minMemoryMB: Int,
         log: @escaping @Sendable (String, ConsoleLevel) -> Void
     ) async throws -> GameProcess {
+        let fileManager = FileManager.default
         guard processes[server.id] == nil else {
             throw DedicatedServerError.alreadyRunning(server.name)
         }
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: server.serverJar.path) else {
+        guard fileManager.fileExists(atPath: server.launchJar.path) else {
             throw DedicatedServerError.notPrepared(server.name)
         }
-        guard fileManager.fileExists(
-            atPath: server.worldDirectory.appendingPathComponent("level.dat").path
-        ) else {
-            throw DedicatedServerError.missingWorld(server.worldName)
+        // A server created without a world generates `level-name` on its
+        // first boot — only hosted copies must already have level.dat.
+        if !server.sourceWorldName.isEmpty {
+            guard fileManager.fileExists(
+                atPath: server.worldDirectory.appendingPathComponent("level.dat").path
+            ) else {
+                throw DedicatedServerError.missingWorld(server.worldName)
+            }
         }
 
         var arguments = [
@@ -134,7 +206,7 @@ actor DedicatedServerService {
             "-XX:MaxGCPauseMillis=100",
             "-XX:+DisableExplicitGC",
             "-XX:+AlwaysPreTouch",
-            "-jar", server.serverJar.path,
+            "-jar", server.launchJar.path,
             "nogui"
         ]
         if java.majorVersion >= 17 {
@@ -325,8 +397,9 @@ actor DedicatedServerService {
         }
         let name = target.lastPathComponent
         let protected = [
-            "server.jar", "eula.txt", "server.properties", "neocraft-server.json",
-            server.worldName, "backups"
+            "server.jar", "fabric-server-launch.jar", "eula.txt", "server.properties",
+            "neocraft-server.json", server.worldName, "backups", "plugins", "mods",
+            "resourcepacks", "libraries", "versions", ".fabric"
         ]
         guard !protected.contains(name) else {
             throw DedicatedServerError.notPrepared("\(name) is managed by NeoCraft")
@@ -337,6 +410,103 @@ actor DedicatedServerService {
             throw DedicatedServerError.notPrepared("Folders can't be deleted here")
         }
         try FileManager.default.removeItem(at: target)
+    }
+
+    // MARK: - Plugins & mods
+
+    /// The folder the server software loads extensions from — `plugins/`
+    /// for Paper, `mods/` for Fabric. Vanilla servers load neither.
+    func extensionDirectory(for server: HostedServer) -> URL? {
+        server.extensionDirectory
+    }
+
+    /// Files (and `.disabled` ones) inside the extension folder the
+    /// server type accepts — jars for Paper/Fabric, zips for vanilla
+    /// resource packs — for the dashboard's extension list.
+    func extensions(for server: HostedServer) -> [ServerFileEntry] {
+        guard let directory = server.extensionDirectory else { return [] }
+        let suffixes = server.serverType.extensionSuffixes
+        return Self.listFiles(at: directory).filter { entry in
+            let name = entry.name.lowercased()
+            let base = name.hasSuffix(".disabled") ? String(name.dropLast(".disabled".count)) : name
+            return suffixes.contains { base.hasSuffix($0) }
+        }
+    }
+
+    /// Downloads an extension file into the server's extension folder.
+    /// `filename` comes from the source (Modrinth file name or the URL's
+    /// last path component); its extension must be one the server type
+    /// accepts (jars for Paper/Fabric, zips for vanilla packs).
+    @discardableResult
+    func installExtension(
+        from url: URL,
+        filename: String?,
+        for server: HostedServer,
+        progress: @escaping @Sendable (Double) -> Void = { _ in }
+    ) async throws -> URL {
+        guard let directory = server.extensionDirectory else {
+            throw DedicatedServerError.notPrepared("\(server.name) takes no extensions")
+        }
+        let name = Self.sanitizeFileName(filename ?? url.lastPathComponent)
+        let lower = name.lowercased()
+        guard server.serverType.extensionSuffixes.contains(where: { lower.hasSuffix($0) }) else {
+            let expected = server.serverType.extensionSuffixes.joined(separator: ", ")
+            throw DedicatedServerError.notPrepared("Only \(expected) files can be installed on a \(server.serverType.title) server")
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var destination = directory.appendingPathComponent(name)
+        // Never silently overwrite an installed file — suffix instead.
+        var counter = 2
+        while FileManager.default.fileExists(atPath: destination.path) {
+            let base = (name as NSString).deletingPathExtension
+            let ext = (name as NSString).pathExtension
+            destination = directory.appendingPathComponent("\(base)-\(counter).\(ext)")
+            counter += 1
+        }
+        try await Downloader.download(DownloadRequest(
+            url: url,
+            destination: destination,
+            label: name
+        )) { fraction in
+            progress(fraction)
+        }
+        return destination
+    }
+
+    /// Enables or disables an installed extension by renaming it to/from
+    /// `.disabled` — the server software skips disabled files.
+    func setExtensionEnabled(_ entry: ServerFileEntry, enabled: Bool, for server: HostedServer) throws {
+        guard let directory = server.extensionDirectory,
+              entry.url.deletingLastPathComponent().standardizedFileURL
+                .path.hasPrefix(directory.standardizedFileURL.path) else {
+            throw DedicatedServerError.notPrepared(server.name)
+        }
+        let name = entry.url.lastPathComponent
+        let target: URL
+        if enabled {
+            guard name.hasSuffix(".disabled") else { return }
+            target = entry.url.deletingLastPathComponent()
+                .appendingPathComponent(String(name.dropLast(".disabled".count)))
+        } else {
+            guard !name.hasSuffix(".disabled") else { return }
+            target = entry.url.appendingPathExtension("disabled")
+        }
+        try FileManager.default.moveItem(at: entry.url, to: target)
+    }
+
+    func deleteExtension(_ entry: ServerFileEntry, for server: HostedServer) throws {
+        guard let directory = server.extensionDirectory,
+              entry.url.deletingLastPathComponent().standardizedFileURL
+                .path.hasPrefix(directory.standardizedFileURL.path) else {
+            throw DedicatedServerError.notPrepared(server.name)
+        }
+        try FileManager.default.removeItem(at: entry.url)
+    }
+
+    private static func sanitizeFileName(_ raw: String) -> String {
+        let last = raw.components(separatedBy: "/").last ?? raw
+        let cleaned = last.replacingOccurrences(of: #"[^\w.\- ]"#, with: "_", options: .regularExpression)
+        return cleaned.isEmpty ? "extension.bin" : cleaned
     }
 
     // MARK: - World backups
@@ -454,6 +624,86 @@ actor DedicatedServerService {
         }.value
     }
 
+    // MARK: - World export / import
+
+    /// Zips the hosted world folder to `destination` (`.zip`). Uses
+    /// `ditto` so macOS metadata and permissions survive the round trip.
+    func exportWorldZip(server: HostedServer, to destination: URL) async throws {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: server.worldDirectory.appendingPathComponent("level.dat").path) else {
+            throw DedicatedServerError.missingWorld(server.worldName)
+        }
+        if fm.fileExists(atPath: destination.path) {
+            try fm.removeItem(at: destination)
+        }
+        try await Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            try fm.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            process.arguments = [
+                "-c", "-k", "--sequesterRsrc", "--keepParent",
+                server.worldDirectory.path, destination.path,
+            ]
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw DedicatedServerError.notPrepared("Couldn't zip the world")
+            }
+        }.value
+    }
+
+    /// Replaces the hosted world with the world folder inside `archive`
+    /// (a `.zip` produced by `exportWorldZip` or a manual zip). The
+    /// previous world moves into `backups/` first. Requires the server
+    /// stopped.
+    func importWorldZip(server: HostedServer, from archive: URL) async throws {
+        guard processes[server.id] == nil else {
+            throw DedicatedServerError.alreadyRunning(server.name)
+        }
+        let fm = FileManager.default
+        let staging = fm.temporaryDirectory
+            .appendingPathComponent("neocraft-import-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: staging) }
+        try await Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            let unzip = Process()
+            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            unzip.arguments = ["-x", "-k", archive.path, staging.path]
+            try unzip.run()
+            unzip.waitUntilExit()
+            guard unzip.terminationStatus == 0 else {
+                throw DedicatedServerError.notPrepared("Couldn't unzip the world archive")
+            }
+        }.value
+        // Find the folder holding level.dat (zip may nest it one level).
+        var candidates = [staging]
+        if let nested = try? fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil) {
+            candidates += nested.filter { $0.hasDirectoryPath }
+        }
+        guard let world = candidates.first(where: {
+            fm.fileExists(atPath: $0.appendingPathComponent("level.dat").path)
+        }) else {
+            throw DedicatedServerError.missingWorld("level.dat")
+        }
+        try await Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            // Park the current world in backups/ before replacing it.
+            if fm.fileExists(atPath: server.worldDirectory.path) {
+                let stamp = ISO8601DateFormatter().string(from: Date())
+                    .replacingOccurrences(of: ":", with: "-")
+                let parked = server.backupsDirectory
+                    .appendingPathComponent("world-before-import-\(stamp)", isDirectory: true)
+                try fm.createDirectory(at: server.backupsDirectory, withIntermediateDirectories: true)
+                try fm.moveItem(at: server.worldDirectory, to: parked)
+            }
+            try fm.createDirectory(at: server.directory, withIntermediateDirectories: true)
+            try fm.copyItem(at: world, to: server.worldDirectory)
+        }.value
+    }
+
     private func writeText(_ text: String, to url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -471,6 +721,12 @@ actor DedicatedServerService {
         upsertProperty("server-port", "\(server.port)", in: &lines)
         upsertProperty("online-mode", server.onlineMode ? "true" : "false", in: &lines)
         upsertProperty("level-name", server.worldName, in: &lines)
+        // Creation preset on top of the managed keys.
+        if let preset = ServerPreset(rawValue: server.preset) {
+            for (key, value) in preset.properties {
+                upsertProperty(key, value, in: &lines)
+            }
+        }
         try writeText(lines.joined(separator: "\n") + "\n", to: url)
     }
 

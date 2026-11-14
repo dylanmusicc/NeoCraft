@@ -201,7 +201,7 @@ private struct ProfileEditor: View {
     var body: some View {
         ProfileHeader(profile: profile)
         Text("A change applies the next time Minecraft starts.")
-            .font(.system(size: 13, design: .rounded))
+            .font(.neoUI(13.0, bold: false))
             .foregroundStyle(Palette.secondaryText)
         PanelSection(title: "Profile") {
             HStack(spacing: 16) {
@@ -218,7 +218,7 @@ private struct ProfileEditor: View {
                     Text("Name")
                 }
                 .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .slot()

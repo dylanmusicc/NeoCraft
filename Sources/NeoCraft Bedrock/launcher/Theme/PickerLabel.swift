@@ -25,7 +25,7 @@ struct PickerLabel: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: title)
                 Text(verbatim: detail)
-                    .font(.system(size: 12, design: .rounded))
+                    .font(.neoUI(12.0, bold: false))
                     .foregroundStyle(detailColour)
             }
             Spacer(minLength: 4)

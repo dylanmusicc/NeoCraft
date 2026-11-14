@@ -65,7 +65,6 @@ enum NeoCornerStyle: String, Codable, CaseIterable, Identifiable, Hashable, Send
 /// Raw values persist in `AppSettings.wallpaperStyle`.
 enum WallpaperStyle: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case aurora
-    case deepDarkPulse
     case cherryPetals
     case endSky
     case netherEmbers
@@ -76,7 +75,6 @@ enum WallpaperStyle: String, Codable, CaseIterable, Identifiable, Hashable, Send
     var title: String {
         switch self {
         case .aurora: "Aurora Bloom"
-        case .deepDarkPulse: "Deep Dark Pulse"
         case .cherryPetals: "Cherry Petals"
         case .endSky: "End Sky"
         case .netherEmbers: "Nether Embers"
@@ -87,7 +85,6 @@ enum WallpaperStyle: String, Codable, CaseIterable, Identifiable, Hashable, Send
     var subtitle: String {
         switch self {
         case .aurora: "Soft accent and glow blooms over the voxel field."
-        case .deepDarkPulse: "A slow breathing glow for OLED-style focus."
         case .cherryPetals: "Petals drifting down like a cherry grove biome."
         case .endSky: "Pale stars and void glow, straight from the End."
         case .netherEmbers: "Embers rising through the dark like a Nether cave."
@@ -98,7 +95,6 @@ enum WallpaperStyle: String, Codable, CaseIterable, Identifiable, Hashable, Send
     var symbol: String {
         switch self {
         case .aurora: "waveform.path"
-        case .deepDarkPulse: "moon.stars"
         case .cherryPetals: "petal"
         case .endSky: "sparkle"
         case .netherEmbers: "flame.fill"
@@ -251,19 +247,19 @@ enum NeoCuratedThemes {
         NeoCuratedTheme(id: "mushroomIsland", title: "Mushroom Island", symbol: "cpu",
                         accentHex: "F472B6", glowHex: "FDE68A", surfaceHex: "",
                         previewTop: "6B2D5C", previewBottom: "1C0B18", family: "Biomes",
-                        wallpaperStyle: "deepDarkPulse"),
+                        wallpaperStyle: "aurora"),
         NeoCuratedTheme(id: "paleGarden", title: "Pale Garden", symbol: "moon.haze.fill",
                         accentHex: "CBD5E1", glowHex: "A78BFA", surfaceHex: "",
                         previewTop: "3A4454", previewBottom: "0E1219", family: "Biomes",
-                        themeMode: .oled, wallpaperStyle: "deepDarkPulse"),
+                        themeMode: .oled, wallpaperStyle: "plain"),
         NeoCuratedTheme(id: "deepslate", title: "Deepslate Depths", symbol: "square.fill.on.square.fill",
                         accentHex: "94A3B8", glowHex: "38BDF8", surfaceHex: "",
                         previewTop: "1E293B", previewBottom: "070B12", family: "Biomes",
-                        themeMode: .oled, wallpaperStyle: "deepDarkPulse"),
+                        themeMode: .oled, wallpaperStyle: "plain"),
         NeoCuratedTheme(id: "warpedWoods", title: "Warped Woods", symbol: "scribble.variable",
                         accentHex: "2DD4BF", glowHex: "67E8F9", surfaceHex: "",
                         previewTop: "134E4A", previewBottom: "04110F", family: "Biomes",
-                        wallpaperStyle: "deepDarkPulse")
+                        wallpaperStyle: "endSky")
     ]
 
     static func theme(id: String) -> NeoCuratedTheme? {
@@ -343,6 +339,7 @@ enum DashboardCardKind: String, Codable, CaseIterable, Identifiable, Hashable, S
     case hardware
     case screenshots
     case boost
+    case servers
 
     var id: String { rawValue }
 
@@ -355,6 +352,7 @@ enum DashboardCardKind: String, Codable, CaseIterable, Identifiable, Hashable, S
         case .hardware: "Hardware Specs"
         case .screenshots: "Recent Screenshots"
         case .boost: "Neo Boost status"
+        case .servers: "Hosted Servers"
         }
     }
 
@@ -367,6 +365,7 @@ enum DashboardCardKind: String, Codable, CaseIterable, Identifiable, Hashable, S
         case .hardware: "Chip, memory, model and macOS at a glance."
         case .screenshots: "Newest in-game captures across instances."
         case .boost: "Fabric performance pack status and installer."
+        case .servers: "Your hosted Java and Bedrock servers at a glance."
         }
     }
 
@@ -379,6 +378,7 @@ enum DashboardCardKind: String, Codable, CaseIterable, Identifiable, Hashable, S
         case .hardware: "desktopcomputer"
         case .screenshots: "photo.stack.fill"
         case .boost: "bolt.fill"
+        case .servers: "server.rack"
         }
     }
 }

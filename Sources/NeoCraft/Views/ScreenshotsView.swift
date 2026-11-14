@@ -24,6 +24,20 @@ struct ScreenshotsView: View {
         }
     }
 
+    /// Bedrock screenshots synced from NeoCraft Bedrock's prefixes,
+    /// narrowed by the same filter.
+    private var bedrockSections: [BedrockContent.ScreenshotGroup] {
+        // Bedrock is a beta feature — synced screenshots hide with it.
+        guard model.settings.betaFeatures.bedrockEdition else { return [] }
+        let needle = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        return model.bedrockContent.screenshots.compactMap { group in
+            let urls = needle.isEmpty ? group.urls : group.urls.filter {
+                $0.lastPathComponent.lowercased().contains(needle)
+            }
+            return urls.isEmpty ? nil : BedrockContent.ScreenshotGroup(title: group.title, urls: urls)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -35,7 +49,7 @@ struct ScreenshotsView: View {
                         .frame(width: 240)
                 }
 
-                if filteredStats.isEmpty {
+                if filteredStats.isEmpty && bedrockSections.isEmpty {
                     EmptyStateView(
                         symbol: "photo.on.rectangle.angled",
                         title: filter.isEmpty ? "No screenshots yet" : "No matches",
@@ -47,9 +61,30 @@ struct ScreenshotsView: View {
                     ForEach(filteredStats, id: \.instance.id) { entry in
                         instanceSection(instance: entry.instance, urls: entry.urls)
                     }
+                    ForEach(bedrockSections) { group in
+                        bedrockSection(group)
+                    }
                 }
             }
             .padding(28)
+        }
+        .onAppear { model.refreshBedrockContent() }
+    }
+
+    private func bedrockSection(_ group: BedrockContent.ScreenshotGroup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(
+                title: "Bedrock — \(group.title)",
+                subtitle: "\(group.urls.count) screenshots · synced from NeoCraft Bedrock"
+            )
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 170), spacing: 12)],
+                spacing: 12
+            ) {
+                ForEach(group.urls, id: \.self) { url in
+                    ScreenshotCell(url: url)
+                }
+            }
         }
     }
 

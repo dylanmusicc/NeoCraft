@@ -49,6 +49,7 @@ public final class NeoCraftHUDClient implements ClientModInitializer {
         HudConfig.ensureExists();
         HudConfig.load();
         HudConfig.startWatcher();
+        UiSync.startWatcher();
 
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("neocraft-hud", "main"));

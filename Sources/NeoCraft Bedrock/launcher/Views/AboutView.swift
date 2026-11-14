@@ -15,7 +15,7 @@ struct AboutView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     TitleText(verbatim: "NeoCraft Bedrock", size: 26)
                     Text("Version \(Self.version)")
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.neoUI(12.0, bold: false))
                         .foregroundStyle(Palette.secondaryText)
                 }
             }
@@ -63,7 +63,7 @@ struct AboutView: View {
             Text(
                 "Minecraft is a trademark of Mojang Synergies AB. NeoCraft Bedrock isn't made or endorsed by Mojang or Microsoft."
             )
-            .font(.system(size: 11, design: .rounded))
+            .font(.neoUI(11.0, bold: false))
             .foregroundStyle(Palette.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 4)
@@ -96,7 +96,7 @@ private struct Credit<Buttons: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 TitleText(verbatim: title, size: 13)
                 Text(verbatim: detail)
-                    .font(.system(size: 11, design: .rounded))
+                    .font(.neoUI(11.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }

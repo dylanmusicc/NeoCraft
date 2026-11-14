@@ -41,12 +41,16 @@
   "settings.language.system": "Systemstandard",
   "settings.beta.title": "Beta-Funktionen",
   "settings.beta.subtitle": "Experimentelle Funktionen — standardmäßig aus und können sich ändern",
-  "settings.beta.hud": "Ingame-HUD (Neo Studio)",
-  "settings.beta.hud.detail": "Installiert den HUD-Begleitmod auf Fabric-Instanzen und synchronisiert das Studio-Layout ins Spiel. Deaktivieren entfernt den Mod wieder.",
+  "settings.beta.hud": "Ingame-NeoCraft-Mods",
+  "settings.beta.hud.detail": "Installiert die Beta-Companion-Mods (HUD, Host-Panel) auf Fabric-Instanzen und synchronisiert Studio-Configs ins Spiel. Das NeoCraft-UI-Theme und das Ingame-Menü sind auf jeder Fabric-Instanz aktiv.",
+  "settings.beta.ui": "In-Game-UI-Theme",
+  "settings.beta.ui.detail": "Zeigt den Neo-Studio-Editor für die In-Game-UI (NeoCraft-UI-Mod-Theme) als Beta-Funktion.",
   "settings.beta.radar": "Seed- & Biom-Radar",
   "settings.beta.radar.detail": "Zeigt eine seed-basierte Biom-Minimap und Schnellaktionen für jede Welt.",
   "settings.beta.args": "Eigene Startargumente",
   "settings.beta.args.detail": "Fügt Felder für JVM- und Spiel-Argumente im Instanz-Editor für Profis hinzu.",
   "settings.beta.bedrock": "Bedrock Edition (Beta)",
-  "settings.beta.bedrock.detail": "Fügt eine Java/Bedrock-Auswahl zu Instanzen hinzu. Bedrock läuft über NeoCraft Bedrock — Play installiert es bei Bedarf."
+  "settings.beta.bedrock.detail": "Fügt eine Java/Bedrock-Auswahl zu Instanzen hinzu. Bedrock läuft über NeoCraft Bedrock — Play installiert es bei Bedarf.",
+  "settings.beta.bedrockServers": "Bedrock-Server-Hosting",
+  "settings.beta.bedrockServers.detail": "Minecraft-Bedrock-Dedicated-Server hosten (Windows-BDS über Wine) im Server-Tab — unabhängig vom Bedrock-Spiel."
 }

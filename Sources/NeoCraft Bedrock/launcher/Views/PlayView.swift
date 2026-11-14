@@ -60,7 +60,7 @@ struct PlayView: View {
                         .minimumScaleFactor(0.6)
                     if let detail = caption.detail {
                         Text(detail)
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .font(.neoUI(12.5, bold: false))
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
@@ -114,7 +114,7 @@ struct PlayView: View {
     // MARK: - Dashboard
 
     private var dashboard: some View {
-        let left: [DashboardCard] = [.account, .runtime, .screenshots]
+        let left: [DashboardCard] = [.account, .runtime]
         let right: [DashboardCard] = [.game, .activity]
         return HStack(alignment: .top, spacing: 18) {
             VStack(spacing: 18) {
@@ -129,7 +129,7 @@ struct PlayView: View {
     }
 
     private enum DashboardCard: String, Identifiable {
-        case account, game, runtime, activity, screenshots
+        case account, game, runtime, activity
         var id: String { rawValue }
     }
 
@@ -140,19 +140,18 @@ struct PlayView: View {
         case .game: gameCard
         case .runtime: runtimeCard
         case .activity: activityCard
-        case .screenshots: screenshotsCard
         }
     }
 
     private func dashHeader(_ title: LocalizedStringKey, symbol: String, tint: Color) -> some View {
         HStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .bold))
+                .font(.neoUI(11.0, bold: true))
                 .foregroundStyle(tint)
                 .frame(width: 22, height: 22)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.neoUI(13.0, bold: true))
                 .foregroundStyle(Palette.text)
             Spacer()
         }
@@ -174,12 +173,12 @@ struct PlayView: View {
                             .frame(width: 38, height: 38)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(verbatim: account.label)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(.neoUI(13.0, bold: true))
                                 .foregroundStyle(Palette.text)
                                 .lineLimit(1)
                             Text(model.readiness.signedIn == true
                                 ? String(localized: "Signed in") : String(localized: "Sign-in needed"))
-                                .font(.system(size: 11, design: .rounded))
+                                .font(.neoUI(11.0, bold: false))
                                 .foregroundStyle(
                                     model.readiness.signedIn == true ? Palette.positive : Palette.warning)
                         }
@@ -187,7 +186,7 @@ struct PlayView: View {
                     }
                 } else {
                     Text("No account")
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.neoUI(13.0, bold: false))
                         .foregroundStyle(Palette.secondaryText)
                 }
                 Button("Manage Account…") { go(.account) }
@@ -229,7 +228,7 @@ struct PlayView: View {
                 checkRow("Rosetta 2", ok: readiness.rosettaInstalled)
                 if model.offeredEngineUpdate != nil {
                     Text("Engine update available")
-                        .font(.system(size: 11, design: .rounded))
+                        .font(.neoUI(11.0, bold: false))
                         .foregroundStyle(Palette.warning)
                 }
                 Button("Settings…") { go(.settings) }
@@ -251,7 +250,7 @@ struct PlayView: View {
                     infoRow("Phase", Self.phaseTitle(session.phase))
                 } else if let detail = caption.detail {
                     Text(detail)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.neoUI(12.0, bold: false))
                         .foregroundStyle(Palette.secondaryText)
                 }
                 if state == .running || state == .stopping {
@@ -259,17 +258,6 @@ struct PlayView: View {
                         .buttonStyle(.pixel(.danger, minHeight: 30))
                         .disabled(state == .stopping)
                 }
-            }
-        }
-    }
-
-    private var screenshotsCard: some View {
-        dashCard {
-            VStack(alignment: .leading, spacing: 12) {
-                dashHeader("Screenshots", symbol: "photo.stack.fill", tint: Palette.amber)
-                RecentShots()
-                Button("Open Screenshots…") { go(.screenshots) }
-                    .buttonStyle(.pixel(.secondary, minHeight: 28))
             }
         }
     }
@@ -290,11 +278,11 @@ struct PlayView: View {
     private func infoRow(_ label: LocalizedStringKey, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.neoUI(12.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
             Spacer()
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.neoUI(12.0, bold: true))
                 .foregroundStyle(Palette.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -304,10 +292,10 @@ struct PlayView: View {
     private func checkRow(_ label: LocalizedStringKey, ok: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(.neoUI(12.0, bold: true))
                 .foregroundStyle(ok ? Palette.positive : Palette.negative)
             Text(label)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.neoUI(12.0, bold: false))
                 .foregroundStyle(Palette.text)
             Spacer()
         }
@@ -362,9 +350,9 @@ private struct NeoCraftPill: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: symbol)
-                .font(.system(size: 9, weight: .bold))
+                .font(.neoUI(9.0, bold: true))
             Text(verbatim: text)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.neoUI(11.0, bold: true))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
@@ -384,7 +372,7 @@ private struct RecentShots: View {
         HStack(spacing: 8) {
             if urls.isEmpty {
                 Text("Nothing captured yet")
-                    .font(.system(size: 12, design: .rounded))
+                    .font(.neoUI(12.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             } else {
                 ForEach(urls.prefix(4), id: \.self) { url in

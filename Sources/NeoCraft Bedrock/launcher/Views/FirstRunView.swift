@@ -6,11 +6,12 @@ import SwiftUI
 /// meanwhile, and the game may still be installing when it is.
 struct FirstRunView: View {
     enum Step: Int, CaseIterable {
-        case mac, account, game, graphics
+        case mac, look, account, game, graphics
 
         var title: LocalizedStringKey {
             switch self {
             case .mac: "Mac"
+            case .look: "Look"
             case .account: "Account"
             case .game: "Game"
             case .graphics: "Graphics"
@@ -28,6 +29,7 @@ struct FirstRunView: View {
             Group {
                 switch step {
                 case .mac: MacStep()
+                case .look: LookStep()
                 case .account: AccountStep()
                 case .game: GameStep()
                 case .graphics: GraphicsStep()
@@ -68,6 +70,7 @@ struct FirstRunView: View {
     private var canContinue: Bool {
         switch step {
         case .mac: model.systemCheck?.rosettaInstalled == true
+        case .look: true
         case .account: model.readiness.signedIn == true
         case .game:
             model.library.latestProfile(of: .release).flatMap(model.installation(of:)) != nil
@@ -156,6 +159,106 @@ private struct MacStep: View {
     }
 }
 
+/// The look-and-feel step: accent, wallpaper and true black. Whatever is
+/// picked is stored as a launcher override (Settings → Appearance can
+/// change it later); leaving everything on "NeoCraft" keeps the mirror.
+private struct LookStep: View {
+    @PlainState private var accentHex: String?
+    @PlainState private var wallpaper: String?
+    @PlainState private var trueBlack = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            TitleText("Make it yours", size: 17)
+            Text("NeoCraft Bedrock follows NeoCraft's theme. Pick your own here if you want this launcher to look different — you can change it any time in Settings → Appearance.")
+                .font(.neoUI(12))
+                .foregroundStyle(Palette.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Text("Accent")
+                    .font(.neoUI(12, bold: true))
+                    .frame(width: 52, alignment: .leading)
+                HStack(spacing: 8) {
+                    accentSwatch(nil, label: "Auto")
+                    ForEach(NeoSync.accentPresets, id: \.self) { hex in
+                        accentSwatch(hex, label: hex)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Text("Wallpaper")
+                    .font(.neoUI(12, bold: true))
+                    .frame(width: 52, alignment: .leading)
+                Picker(selection: Binding(
+                    get: { wallpaper ?? "" },
+                    set: { wallpaper = $0.isEmpty ? nil : $0 }
+                )) {
+                    Text("NeoCraft's choice").tag("")
+                    ForEach(NeoSync.wallpaperOptions, id: \.id) { option in
+                        Text(option.title).tag(option.id)
+                    }
+                } label: { EmptyView() }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+
+            Toggle(isOn: Binding(
+                get: { trueBlack },
+                set: { trueBlack = $0 }
+            )) {
+                Text("True black background")
+                    .font(.neoUI(12))
+            }
+            .toggleStyle(PixelToggleStyle())
+        }
+        .onAppear {
+            accentHex = NeoSync.LauncherTheme.accentHex
+            wallpaper = NeoSync.LauncherTheme.wallpaperStyle
+            trueBlack = NeoSync.LauncherTheme.trueBlack ?? false
+        }
+        .onDisappear {
+            NeoSync.LauncherTheme.setAccent(accentHex)
+            NeoSync.LauncherTheme.setWallpaper(wallpaper)
+            NeoSync.LauncherTheme.setTrueBlack(trueBlack ? true : nil)
+            NeoSync.shared.reload()
+        }
+    }
+
+    private func accentSwatch(_ hex: String?, label: String) -> some View {
+        let selected = (accentHex ?? "") == (hex ?? "")
+        return Button {
+            accentHex = hex
+        } label: {
+            Group {
+                if let hex {
+                    Circle().fill(NeoSync.color(hex))
+                } else {
+                    Circle().fill(
+                        LinearGradient(
+                            colors: [Palette.accent, Palette.glow],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                }
+            }
+            .frame(width: 24, height: 24)
+            .overlay {
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.neoUI(10, bold: true))
+                        .foregroundStyle(.white)
+                }
+            }
+            .overlay(Circle().strokeBorder(Palette.ink.opacity(0.4), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(label)
+    }
+}
+
 private struct GraphicsStep: View {
     @Environment(AppModel.self) private var model
 
@@ -170,7 +273,7 @@ private struct GraphicsStep: View {
                 Text(
                     "NeoCraft Bedrock comes with D3DMetal from Apple's Game Porting Toolkit, unchanged. Apple's license applies to it, not the GPL: read it and accept it to continue."
                 )
-                .font(.system(size: 12, design: .rounded))
+                .font(.neoUI(12.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 RichText(rtf: license)
@@ -184,7 +287,7 @@ private struct GraphicsStep: View {
                 }
             } else {
                 Text("D3DMetal is missing from the app. Install NeoCraft Bedrock again.")
-                    .font(.system(size: 12, design: .rounded))
+                    .font(.neoUI(12.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             }
         }
@@ -218,7 +321,7 @@ private struct AccountStep: View {
                 }
             } else {
                 Text(AccountMenu.beforeSigningIn)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Sign In…") { model.addAccount() }
@@ -248,7 +351,7 @@ private struct GameStep: View {
                 }
                 ProgressBar(value: install.progress?.fraction ?? 0)
                 Text("The download is about 2 GB. You can go on to the next step meanwhile.")
-                    .font(.system(size: 12, design: .rounded))
+                    .font(.neoUI(12.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             } else if let version = release.flatMap(model.installation(of:))?.version {
                 CheckRow(
@@ -258,7 +361,7 @@ private struct GameStep: View {
                 Text(
                     "NeoCraft Bedrock downloads the version Microsoft serves now with your account's license, and keeps it ready for the engine. Worlds and settings are kept apart, for each account."
                 )
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 served
@@ -366,7 +469,7 @@ private struct CheckRow<Actions: View>: View {
             VStack(alignment: .leading, spacing: 3) {
                 TitleText(verbatim: title, size: 13)
                 Text(verbatim: detail)
-                    .font(.system(size: 12, design: .rounded))
+                    .font(.neoUI(12.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }

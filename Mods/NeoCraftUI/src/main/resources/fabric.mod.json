@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "neocraft-ui",
+  "version": "1.0.0",
+  "name": "NeoCraft UI",
+  "description": "Themes the vanilla title, pause, death and options screens in the NeoCraft look — accent tints or a full NeoCraft redesign, configured from Neo Studio.",
+  "authors": ["NeoCraft"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/neocraft-ui/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.neocraft.ui.NeoCraftUIClient"]
+  },
+  "mixins": ["neocraft-ui.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": ">=26.3",
+    "fabric-api": ">=0.161.0",
+    "java": ">=25"
+  }
+}

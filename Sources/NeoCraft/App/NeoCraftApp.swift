@@ -395,9 +395,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Give hosted dedicated servers a moment to flush their worlds after
         // `stop`; the service escalates to SIGTERM for anything still alive.
         let manager = AppModel.shared.dedicatedServers
+        let bedrockManager = AppModel.shared.bedrockServers
         let semaphore = DispatchSemaphore(value: 0)
         Task.detached {
             await manager.terminateAll()
+            await bedrockManager.terminateAll()
             semaphore.signal()
         }
         _ = semaphore.wait(timeout: .now() + 25)

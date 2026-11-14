@@ -101,8 +101,7 @@ struct SnapshotRenderView: View {
         switch request.section {
         case .play: PlayView()
         case .instances: InstancesView()
-        case .servers: ServersView()
-        case .dashboard: DashboardView()
+        case .servers, .dashboard: ServersView()
         case .studio: StudioView()
         case .mods: ModLibraryView()
         case .screenshots: ScreenshotsView()

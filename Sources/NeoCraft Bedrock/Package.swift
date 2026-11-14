@@ -19,5 +19,17 @@ let package = Package(
                 .enableUpcomingFeature("InferIsolatedConformances"),
                 .enableUpcomingFeature("MemberImportVisibility"),
             ]),
+        // Headless Bedrock Dedicated Server runner NeoCraft spawns for
+        // hosted Bedrock servers: Wine + the installed engine, no UI.
+        .executableTarget(
+            name: "bedrock-host",
+            dependencies: [.product(name: "LauncherCore", package: "LauncherCore")],
+            path: "serverhost",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+                .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("MemberImportVisibility"),
+            ]),
     ]
 )

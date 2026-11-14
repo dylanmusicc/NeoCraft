@@ -17,7 +17,7 @@ struct ContentsView: View {
                 Text(
                     "The worlds and packs of \(account.label) in \(profile.product.title), the same for every profile of it."
                 )
-                .font(.system(size: 13, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
                 Folders(profile: profile, data: data, account: account, listing: listing)
                 Worlds(data: data, listing: listing)
@@ -25,7 +25,7 @@ struct ContentsView: View {
                 Development(data: data, listing: listing)
             } else {
                 Text("Add an account to see its worlds and packs.")
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             }
         }
@@ -98,11 +98,11 @@ private struct Worlds: View {
             }
             if listing.unreadable {
                 Text("The game's folders can't be read.")
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.negative)
             } else if listing.worlds.isEmpty {
                 Text("No world yet. Those you create in the game show here.")
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             }
             ForEach(listing.worlds) { world in
@@ -180,7 +180,7 @@ private struct Packs: View {
             }
             if listing.packs.isEmpty && !listing.unreadable {
                 Text("No pack yet.")
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             }
             ForEach(listing.packs) { pack in
@@ -224,7 +224,7 @@ private struct Development: View {
         PanelSection(title: "Development") {
             if listing.user == nil {
                 Text("Play this version once: the game makes these folders the first time it runs.")
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
             }
             folder("com.mojang for packs", shared)
@@ -272,7 +272,7 @@ private struct Development: View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.neoUI(13.0, bold: true))
                     .foregroundStyle(Palette.text)
                 Text(verbatim: url?.path ?? "–")
                     .font(.system(size: 12, design: .rounded).monospaced())

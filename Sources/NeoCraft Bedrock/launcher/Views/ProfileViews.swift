@@ -27,7 +27,7 @@ struct ProfileMenuItems: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: model.name(of: profile))
                     Text(verbatim: model.detail(of: profile))
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.neoUI(12.0, bold: false))
                         .foregroundStyle(Palette.secondaryText)
                 }
             }

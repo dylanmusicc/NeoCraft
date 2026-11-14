@@ -14,7 +14,7 @@ struct ToolkitLicenseSheet: View {
             Text(
                 "NeoCraft Bedrock copies D3DMetal \(license.version) from Apple's Game Porting Toolkit as it is. Apple's license covers that copy: accept it to go on."
             )
-            .font(.system(size: 13, design: .rounded))
+            .font(.neoUI(13.0, bold: false))
             .foregroundStyle(Palette.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
             RichText(rtf: license.rtf)

@@ -37,12 +37,12 @@ struct Card<Actions: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 TitleText(verbatim: title, size: 14)
                 Text(status)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 if let warning {
                     Text(warning)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.neoUI(12.0, bold: false))
                         .foregroundStyle(Palette.warning)
                 }
             }

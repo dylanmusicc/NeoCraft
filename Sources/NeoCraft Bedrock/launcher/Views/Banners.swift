@@ -145,7 +145,7 @@ private struct Banner<Actions: View>: View {
             VStack(alignment: .leading, spacing: 6) {
                 TitleText(verbatim: title, size: 14)
                 Text(message)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.neoUI(13.0, bold: false))
                     .foregroundStyle(Palette.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }

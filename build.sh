@@ -173,11 +173,12 @@ else
   echo "      Build it first: cd \"Sources/NeoCraft Bedrock\" && scripts/build.sh"
 fi
 
-echo "==> Building NeoCraftHUD Fabric mod"
-HUD_DIR="$ROOT/Mods/NeoCraftHUD"
-# Gradle names the artifact neocraft-hud-<version>.jar; accept any match.
-HUD_JAR="$(ls -t "$HUD_DIR"/build/libs/neocraft-hud-*.jar 2>/dev/null | grep -v sources | head -1 || true)"
-[[ -z "$HUD_JAR" ]] && HUD_JAR="$HUD_DIR/build/libs/neocraft-hud.jar"
+echo "==> Building NeoCraft Fabric mods"
+# First-party companion mods bundled into NeoCraft.app and auto-installed
+# into Neo Boost Fabric instances: HUD widgets, the in-game server/host
+# bridge and the NeoCraft screen theme.
+MOD_DIRS=("NeoCraftHUD" "NeoCraftHost" "NeoCraftUI")
+MOD_JAR_NAMES=("neocraft-hud" "neocraft-host" "neocraft-ui")
 GRADLE_VERSION="9.9.1"
 GRADLE_CACHE="$HOME/.neocraft/gradle"
 GRADLE_HOME="$GRADLE_CACHE/gradle-$GRADLE_VERSION"
@@ -185,10 +186,6 @@ GRADLE_HOME="$GRADLE_CACHE/gradle-$GRADLE_VERSION"
 # Ensure a Gradle runtime is available: prefer the project's wrapper, then
 # gradle on PATH, then a pinned distribution cached under ~/.neocraft/gradle.
 ensure_gradle() {
-  if [[ -x "$HUD_DIR/gradlew" ]]; then
-    echo "    using project wrapper ($HUD_DIR/gradlew)"
-    return 0
-  fi
   if command -v gradle >/dev/null 2>&1; then
     echo "    using gradle from PATH"
     return 0
@@ -218,42 +215,60 @@ ensure_gradle() {
   return 0
 }
 
-MOD_BUILT=0
-if ensure_gradle; then
-  # Generate the wrapper once so future builds use ./gradlew.
-  if [[ ! -x "$HUD_DIR/gradlew" ]]; then
-    if [[ -x "$GRADLE_HOME/bin/gradle" ]]; then
-      (cd "$HUD_DIR" && "$GRADLE_HOME/bin/gradle" wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin) \
-        || echo "warn: could not generate gradle wrapper"
-    else
-      (cd "$HUD_DIR" && gradle wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin) \
-        || echo "warn: could not generate gradle wrapper"
-    fi
-    chmod +x "$HUD_DIR/gradlew" 2>/dev/null || true
-  fi
-
-  if [[ -x "$HUD_DIR/gradlew" ]]; then
-    (cd "$HUD_DIR" && ./gradlew --quiet build -x test) && MOD_BUILT=1 || echo "warn: mod build failed"
+gradle_cmd() {
+  # Runs `gradle <args>` inside the given mod directory, preferring the
+  # project wrapper, then a cached distribution, then PATH.
+  local dir="$1"; shift
+  if [[ -x "$dir/gradlew" ]]; then
+    (cd "$dir" && ./gradlew --quiet "$@")
   elif [[ -x "$GRADLE_HOME/bin/gradle" ]]; then
-    (cd "$HUD_DIR" && "$GRADLE_HOME/bin/gradle" --quiet build -x test) && MOD_BUILT=1 || echo "warn: mod build failed"
+    (cd "$dir" && "$GRADLE_HOME/bin/gradle" --quiet "$@")
+  elif command -v gradle >/dev/null 2>&1; then
+    (cd "$dir" && gradle --quiet "$@")
   else
-    (cd "$HUD_DIR" && gradle --quiet build -x test) && MOD_BUILT=1 || echo "warn: mod build failed"
+    return 1
   fi
+}
+
+if ensure_gradle; then
+  for i in "${!MOD_DIRS[@]}"; do
+    MOD_DIR="$ROOT/Mods/${MOD_DIRS[$i]}"
+    [[ -d "$MOD_DIR" ]] || continue
+    echo "    building ${MOD_DIRS[$i]}…"
+    # Generate the wrapper once so future builds use ./gradlew.
+    if [[ ! -x "$MOD_DIR/gradlew" ]]; then
+      if [[ -x "$GRADLE_HOME/bin/gradle" ]]; then
+        (cd "$MOD_DIR" && "$GRADLE_HOME/bin/gradle" wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin) \
+          || echo "warn: could not generate gradle wrapper for ${MOD_DIRS[$i]}"
+      elif command -v gradle >/dev/null 2>&1; then
+        (cd "$MOD_DIR" && gradle wrapper --gradle-version "$GRADLE_VERSION" --distribution-type bin) \
+          || echo "warn: could not generate gradle wrapper for ${MOD_DIRS[$i]}"
+      fi
+      chmod +x "$MOD_DIR/gradlew" 2>/dev/null || true
+    fi
+    gradle_cmd "$MOD_DIR" build -x test || echo "warn: ${MOD_DIRS[$i]} build failed"
+  done
 else
-  echo "warn: Gradle unavailable — skipping mod build"
+  echo "warn: Gradle unavailable — skipping mod builds"
 fi
 
-# Bundle the freshly built jar, or fall back to a prebuilt one.
-if [[ ! -f "$HUD_JAR" && -f "$ROOT/Resources/Mods/neocraft-hud.jar" ]]; then
-  HUD_JAR="$ROOT/Resources/Mods/neocraft-hud.jar"
-fi
-if [[ -f "$HUD_JAR" ]]; then
-  mkdir -p "$RESOURCES_DIR/Mods"
-  cp "$HUD_JAR" "$RESOURCES_DIR/Mods/neocraft-hud.jar"
-  echo "    bundled $HUD_JAR"
-else
-  echo "warn: no neocraft-hud.jar produced — build skipped or failed (the launcher still works without it)"
-fi
+# Bundle the freshly built jars, falling back to prebuilt ones.
+mkdir -p "$RESOURCES_DIR/Mods"
+for i in "${!MOD_JAR_NAMES[@]}"; do
+  JAR_NAME="${MOD_JAR_NAMES[$i]}"
+  MOD_DIR="$ROOT/Mods/${MOD_DIRS[$i]}"
+  JAR="$(ls -t "$MOD_DIR"/build/libs/"$JAR_NAME"-*.jar 2>/dev/null | grep -v sources | head -1 || true)"
+  [[ -z "$JAR" ]] && JAR="$MOD_DIR/build/libs/$JAR_NAME.jar"
+  if [[ ! -f "$JAR" && -f "$ROOT/Resources/Mods/$JAR_NAME.jar" ]]; then
+    JAR="$ROOT/Resources/Mods/$JAR_NAME.jar"
+  fi
+  if [[ -f "$JAR" ]]; then
+    cp "$JAR" "$RESOURCES_DIR/Mods/$JAR_NAME.jar"
+    echo "    bundled $JAR_NAME.jar"
+  else
+    echo "warn: no $JAR_NAME.jar produced — build skipped or failed (the launcher still works without it)"
+  fi
+done
 
 echo "==> Signing app bundle (ad-hoc)"
 xattr -cr "$APP" || true

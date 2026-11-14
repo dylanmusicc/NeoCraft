@@ -12,41 +12,47 @@ extension View {
     /// The card material Neo Studio's glass-blur slider picks — the same
     /// thresholds as `NeoCardModifier.cardMaterial`.
     private var panelMaterial: Material {
+        if NeoSync.shared.liquidGlass { return .regularMaterial }
         switch NeoSync.shared.glassBlur {
-        case ..<0.34: .ultraThinMaterial
-        case ..<0.67: .thinMaterial
-        case ..<0.9: .regularMaterial
-        default: .thickMaterial
+        case ..<0.34: return .ultraThinMaterial
+        case ..<0.67: return .thinMaterial
+        case ..<0.9: return .regularMaterial
+        default: return .thickMaterial
         }
     }
 
     func panelBackground(opacity: Double = 0.92) -> some View {
-        background {
+        // Liquid Glass reads clearer: thinner material plus a lower fill
+        // so the wallpaper shows through like Apple's glass surfaces.
+        let effectiveOpacity = NeoSync.shared.liquidGlass ? min(opacity, 0.74) : opacity
+        return background {
             ZStack {
                 if let tint = NeoSync.shared.cardTint {
                     RoundedRectangle(cornerRadius: NeoSync.shared.radius(16), style: .continuous)
-                        .fill(tint.opacity(0.08))
+                        .fill(tint.opacity(NeoSync.shared.liquidGlass ? 0.05 : 0.08))
                 }
                 RoundedRectangle(cornerRadius: NeoSync.shared.radius(16), style: .continuous)
                     .fill(panelMaterial)
-                    .opacity(opacity)
+                    .opacity(effectiveOpacity)
             }
         }
         .overlay {
             RoundedRectangle(cornerRadius: NeoSync.shared.radius(16), style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.22), Color.white.opacity(0.04),
-                            Color.black.opacity(0.10),
-                        ],
+                        colors: NeoSync.shared.liquidGlass
+                            ? [Color.white.opacity(0.38), Color.white.opacity(0.10), Color.white.opacity(0.05)]
+                            : [
+                                Color.white.opacity(0.22), Color.white.opacity(0.04),
+                                Color.black.opacity(0.10),
+                            ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 1
+                    lineWidth: NeoSync.shared.liquidGlass ? 1.2 : 1
                 )
         }
-        .shadow(color: .black.opacity(0.10), radius: 18, x: 0, y: 8)
+        .shadow(color: .black.opacity(NeoSync.shared.liquidGlass ? 0.06 : 0.10), radius: NeoSync.shared.liquidGlass ? 24 : 18, x: 0, y: NeoSync.shared.liquidGlass ? 10 : 8)
     }
 }
 
@@ -83,7 +89,7 @@ struct RowLabel: View {
                 .font(.neoPixelBold(12))
                 .foregroundStyle(Palette.text)
             detail
-                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .font(.neoUI(13.0, bold: false))
                 .foregroundStyle(Palette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }

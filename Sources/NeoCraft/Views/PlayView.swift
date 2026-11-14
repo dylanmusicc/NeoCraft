@@ -78,6 +78,7 @@ struct PlayView: View {
         case .hardware: 1.4
         case .screenshots: 1.0
         case .boost: 1.7
+        case .servers: 1.2
         }
     }
 
@@ -126,6 +127,66 @@ struct PlayView: View {
         case .screenshots: recentScreenshotsCard
         case .boost:
             if model.selectedInstance?.edition == .bedrock { EmptyView() } else { boostCard }
+        case .servers: hostedServersCard
+        }
+    }
+
+    /// Dashboard card listing hosted servers — start/stop inline and a
+    /// jump into the Servers tab dashboard.
+    private var hostedServersCard: some View {
+        NeoCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    SectionHeader(title: "Hosted Servers", symbol: "server.rack")
+                    Spacer()
+                    Button {
+                        model.go(to: .servers)
+                    } label: {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(NeoButtonStyle(kind: .ghost, compact: true))
+                    .help("Open Servers tab")
+                }
+
+                let servers = model.visibleHostedServers.prefix(4)
+                if servers.isEmpty {
+                    Text("No hosted servers yet — create one in the Servers tab.")
+                        .font(.neoCaption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(servers)) { server in
+                        let running = model.isServerRunning(server)
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(running ? NeoPalette.mint : Color.secondary.opacity(0.4))
+                                .frame(width: 7, height: 7)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(server.name)
+                                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                    .lineLimit(1)
+                                Text("\(server.edition == .bedrock ? "Bedrock" : server.serverType.title) · :\(server.port)")
+                                    .font(.neoCaption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button(running ? "Stop" : "Start") {
+                                running ? model.stopHostedServer(server) : model.startHostedServer(server)
+                            }
+                            .buttonStyle(NeoButtonStyle(
+                                kind: running ? .danger : .primary, compact: true))
+                            Button {
+                                model.openServerDashboard(server)
+                                model.go(to: .servers)
+                            } label: {
+                                Image(systemName: "arrow.right.circle")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Open dashboard")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -184,7 +245,8 @@ struct PlayView: View {
 
                 VStack(alignment: .trailing, spacing: 9) {
                     launchButton(instance)
-                    if instance.edition == .bedrock {
+                    if instance.edition == .bedrock,
+                       model.settings.betaFeatures.bedrockEdition {
                         bedrockSourceCaption
                     }
                     if instance.edition == .java {
@@ -381,7 +443,10 @@ struct PlayView: View {
     @ViewBuilder
     private func launchButton(_ instance: GameInstance) -> some View {
         if instance.edition == .bedrock {
-            bedrockPlayButton
+            // Bedrock beta off → no launch UI at all.
+            if model.settings.betaFeatures.bedrockEdition {
+                bedrockPlayButton
+            }
         } else {
             javaLaunchButton(instance)
         }
