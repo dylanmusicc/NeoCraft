@@ -53,6 +53,9 @@ public struct Profile: Codable, Sendable, Equatable, Identifiable {
         public var startsFullScreen = false
         /// Whether the game holds its frame rate to the display's. Its menus don't offer this.
         public var usesVSync = false
+        /// Whether the launch writes `GameTuning.performance` over the game's graphics
+        /// settings: Fancy, no MSAA, 16 chunks and a 60 fps cap, for an 8 GB MacBook Neo.
+        public var usesPerformanceMode = true
         /// The engine's record of every second's frame rate, in the session's folder.
         public var writesFPSLog = true
 
@@ -137,6 +140,9 @@ extension Profile.Settings {
         startsFullScreen =
             try container.decodeIfPresent(Bool.self, forKey: .startsFullScreen) ?? startsFullScreen
         usesVSync = try container.decodeIfPresent(Bool.self, forKey: .usesVSync) ?? usesVSync
+        usesPerformanceMode =
+            try container.decodeIfPresent(Bool.self, forKey: .usesPerformanceMode)
+            ?? usesPerformanceMode
         writesFPSLog =
             try container.decodeIfPresent(Bool.self, forKey: .writesFPSLog) ?? writesFPSLog
     }

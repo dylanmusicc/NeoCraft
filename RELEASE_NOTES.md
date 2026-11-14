@@ -1,15 +1,21 @@
-# NeoCraft 2.1.2
+# NeoCraft 2.1.3
 
 Native Minecraft launcher for macOS — Java **and** Bedrock Edition, Swift 6 + SwiftUI, tuned for Apple silicon and 8 GB Macs.
 
 ## Install
 
-- **`NeoCraft-2.1.2.pkg`** — guided installer, places the app in `/Applications` (recommended)
-- **`NeoCraft-2.1.2.dmg`** — classic drag-to-Applications disk image
+- **`NeoCraft-2.1.3.pkg`** — guided installer, places the app in `/Applications` (recommended)
+- **`NeoCraft-2.1.3.dmg`** — classic drag-to-Applications disk image
 
 > NeoCraft is ad-hoc signed and not notarized yet. On first launch, right-click the app → **Open** (or run `xattr -cr /Applications/NeoCraft.app`).
 
 Requires macOS 14+ on Apple silicon. A Microsoft account that owns Minecraft is needed to play.
+
+## What's new in 2.1.3 — Bedrock Performance Mode
+
+- **Performance mode for Bedrock (on by default)** — every launch now writes a tuned set of graphics options for the MacBook Neo's A18 Pro and its 8 GB of memory: Fancy instead of Vibrant Visuals, no MSAA (which also works around the Metal 4 interface bug), 16 chunks of render distance, cheapest fog/reflections/shadows/bloom and a 60 fps cap.
+- **New "Performance mode" toggle** in the Bedrock profile's Graphics settings — turn it off to manage graphics inside the game again; the setting applies from the next start.
+- Measured on-device: the bundled Bedrock ran at ~15–20 fps in-world with Vibrant Visuals, 28 chunks and MSAA 2; the preset targets a steady 60 fps. `fps.log` in the session folder shows the result of every second.
 
 ## What's new in 2.1.2 — Beta Warnings & Legal
 

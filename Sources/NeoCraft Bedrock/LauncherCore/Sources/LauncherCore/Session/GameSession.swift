@@ -98,11 +98,14 @@ public actor GameSession {
                 retinaMode: plan.settings.usesRetinaMode, tool: tool, output: prefixLog.writer)
             try await prefix.installGameInput(from: plan.game, tool: tool, output: prefixLog.writer)
             if let product = GameProduct(storeID: plan.game.storeID) {
-                try prefix.setGameOptions(
-                    [
-                        "gfx_fullscreen": plan.settings.startsFullScreen,
-                        "gfx_vsync": plan.settings.usesVSync,
-                    ], of: product, user: plan.host.user)
+                var options = [
+                    "gfx_fullscreen": plan.settings.startsFullScreen ? "1" : "0",
+                    "gfx_vsync": plan.settings.usesVSync ? "1" : "0",
+                ]
+                if plan.settings.usesPerformanceMode {
+                    options.merge(GameTuning.performance) { _, tuned in tuned }
+                }
+                try prefix.setGameOptions(options, of: product, user: plan.host.user)
             }
         } catch {
             await stopPrefix()

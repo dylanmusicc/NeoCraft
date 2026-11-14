@@ -3,7 +3,7 @@ import Foundation
 enum AppConstants {
     static let appName = "NeoCraft"
     static let displayName = "NeoCraft"
-    static let version = "2.1.2"
+    static let version = "2.1.3"
     static let build = "2"
     static let bundleIdentifier = "com.neocraft.launcher"
     static let userAgent = "NeoCraft/\(version) (macOS; Minecraft Launcher; +https://modrinth.com)"

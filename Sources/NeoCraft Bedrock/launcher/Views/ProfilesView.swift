@@ -256,6 +256,13 @@ private struct ProfileEditor: View {
                         "Holds the frame rate to the display's. The game's own settings don't offer it. An account's first game starts with it on."
                 )
             }
+            Toggle(isOn: setting(\.usesPerformanceMode)) {
+                RowLabel(
+                    "Performance mode",
+                    detail:
+                        "Writes settings for 60 fps on 8 GB Macs at every start: Fancy graphics, no MSAA, 16 chunks, no fog, reflections, shadows or bloom, capped at 60 fps. Turn it off to manage graphics in the game."
+                )
+            }
             Toggle(isOn: setting(\.showsMetalHUD)) {
                 RowLabel(
                     "Metal HUD",

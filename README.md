@@ -3,7 +3,7 @@
 <img src="https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge&logo=apple" alt="macOS 14+">
 <img src="https://img.shields.io/badge/Apple_Silicon-arm64-4ADE80?style=for-the-badge&logo=apple" alt="Apple Silicon">
 <img src="https://img.shields.io/badge/Swift-6-FBBF24?style=for-the-badge&logo=swift" alt="Swift 6">
-<img src="https://img.shields.io/badge/Version-2.1.2-7C3AED?style=for-the-badge" alt="v2.1.2">
+<img src="https://img.shields.io/badge/Version-2.1.3-7C3AED?style=for-the-badge" alt="v2.1.3">
 
 # ⛏️ NeoCraft
 
@@ -27,7 +27,7 @@ alles wie von Zauberhand.
 | ☕ **Java, automatisch** | Eclipse Temurin JDK 21/25 wird selbstständig geladen — passgenau zur Minecraft-Version. |
 | 📦 **Mod Library** | Modrinth-Suche mit Versions- & Fabric-Filtern, Dependency-Auflösung, One-Click-Install. |
 | 🌍 **6 Sprachen** | Englisch, British English, Deutsch, Spanisch, Französisch, Russisch. |
-| 🛏️ **Bedrock (Beta)** | Minecraft für Windows läuft nativ über Wine + D3DMetal — direkt aus der App. |
+| 🛏️ **Bedrock (Beta)** | Minecraft für Windows läuft nativ über Wine + D3DMetal — direkt aus der App, mit Performance-Modus für flüssige 60 fps auf 8-GB-Macs. |
 | 🎨 **Studio** | Themes, Wallpapers, Akzente, Grid — dein Launcher, dein Stil. Frosted Glass bis OLED Dark. |
 | 🌡️ **Kühl & leise** | 4,5 GB Heap, G1GC-Tuning, FPS-Cap & Render-Distance — dein MacBook bleibt kühl. |
 | 📡 **Server Radar** | Server-Liste mit Live-Ping direkt im Launcher. |
@@ -57,10 +57,10 @@ die Server-Liste übersichtlich.
 
 ```bash
 # 1. NeoCraft holen
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.2.pkg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.3.pkg
 
 # 2. Installieren (zieht die App nach /Applications)
-open NeoCraft-2.1.2.pkg
+open NeoCraft-2.1.3.pkg
 ```
 
 > **Erster Start:** macOS fragt einmal nach Erlaubnis — **Rechtsklick → Öffnen**.
@@ -73,8 +73,8 @@ Das richtige JDK lädt sich von allein. Fertig.
 <summary>🖼️ Alternativ: DMG (Drag & Drop)</summary>
 
 ```bash
-curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.2.dmg
-open NeoCraft-2.1.2.dmg
+curl -LO https://github.com/dylanmusicc/NeoCraft/releases/latest/download/NeoCraft-2.1.3.dmg
+open NeoCraft-2.1.3.dmg
 # NeoCraft.app auf den Applications-Ordner ziehen
 ```
 

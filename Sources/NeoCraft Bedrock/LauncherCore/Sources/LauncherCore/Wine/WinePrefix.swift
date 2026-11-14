@@ -90,13 +90,13 @@ extension WinePrefix {
 
     /// Writes values into the game's options for each Xbox user that has played here. The game
     /// writes that file itself the first time a user plays.
-    func setGameOptions(_ values: [String: Bool], of product: GameProduct, user: String) throws {
+    func setGameOptions(_ values: [String: String], of product: GameProduct, user: String) throws {
         let users = gameData(of: product, user: user).appending(path: "Users")
         for name in (try? FileManager.default.contentsOfDirectory(atPath: users.path)) ?? [] {
             let file = users.appending(path: "\(name)/games/com.mojang/minecraftpe/options.txt")
             guard var options = try? String(contentsOf: file, encoding: .utf8) else { continue }
             for (key, value) in values.sorted(by: { $0.key < $1.key }) {
-                let line = "\(key):\(value ? 1 : 0)"
+                let line = "\(key):\(value)"
                 let present = "(?m)^\(key):[0-9]+"
                 options =
                     options.range(of: present, options: .regularExpression) != nil

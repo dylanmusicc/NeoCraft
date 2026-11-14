@@ -104,13 +104,13 @@ struct GameOptionsTests {
         try write("a:1\r\ngfx_vsync:1\r\ngfx_fullscreen:0\r\nb:2\r\n", to: first)
         try write("gfx_vsync:1\ngfx_fullscreen:0\n", to: second)
         try prefix.setGameOptions(
-            ["gfx_fullscreen": true, "gfx_vsync": false], of: .release, user: "test")
+            ["gfx_fullscreen": "1", "gfx_vsync": "0"], of: .release, user: "test")
         #expect(
             try String(contentsOf: first, encoding: .utf8)
                 == "a:1\r\ngfx_vsync:0\r\ngfx_fullscreen:1\r\nb:2\r\n")
         #expect(
             try String(contentsOf: second, encoding: .utf8) == "gfx_vsync:0\ngfx_fullscreen:1\n")
-        try prefix.setGameOptions(["gfx_fullscreen": false], of: .release, user: "test")
+        try prefix.setGameOptions(["gfx_fullscreen": "0"], of: .release, user: "test")
         #expect(
             try String(contentsOf: second, encoding: .utf8) == "gfx_vsync:0\ngfx_fullscreen:0\n")
     }
@@ -119,14 +119,14 @@ struct GameOptionsTests {
         let prefix = WinePrefix(url: temporary.url)
         let file = options(of: "1", in: prefix)
         try write("other_gfx_vsync:1\n", to: file)
-        try prefix.setGameOptions(["gfx_vsync": false], of: .release, user: "test")
+        try prefix.setGameOptions(["gfx_vsync": "0"], of: .release, user: "test")
         #expect(
             try String(contentsOf: file, encoding: .utf8) == "gfx_vsync:0\nother_gfx_vsync:1\n")
     }
 
     @Test func leavesAnAccountThatHasNotPlayedAlone() throws {
         let prefix = WinePrefix(url: temporary.url)
-        try prefix.setGameOptions(["gfx_vsync": false], of: .release, user: "test")
+        try prefix.setGameOptions(["gfx_vsync": "0"], of: .release, user: "test")
         #expect(try FileManager.default.contentsOfDirectory(atPath: temporary.url.path).isEmpty)
     }
 }
